@@ -641,8 +641,8 @@ button{
 
 .floating-plus{
     position:fixed;
-    left:272px;
-    bottom:78px;
+    left:calc(350px - 78px);
+    bottom:105px;
     width:58px;
     height:58px;
     border:0;
@@ -652,7 +652,7 @@ button{
     font-size:33px;
     line-height:1;
     box-shadow:0 4px 12px rgba(0,0,0,.28);
-    z-index:7000;
+    z-index:9000;
     display:flex;
     align-items:center;
     justify-content:center;
@@ -876,6 +876,45 @@ button{
     border-radius:50%;
 }
 
+
+/* =========================================================
+   THEME
+========================================================= */
+body.dark-mode{
+    background:#111b21;
+    color:#e9edef;
+}
+body.dark-mode .app-shell,
+body.dark-mode .sidebar,
+body.dark-mode .main,
+body.dark-mode .message-area{background:#111b21;color:#e9edef}
+body.dark-mode .sidebar-header,
+body.dark-mode .main-header,
+body.dark-mode .search-area{background:#202c33;color:#e9edef;border-color:#33434d}
+body.dark-mode .chat-item{background:#111b21;color:#e9edef;border-color:#202c33}
+body.dark-mode .chat-item:hover{background:#202c33}
+body.dark-mode .chat-time,
+body.dark-mode .chat-preview,
+body.dark-mode .settings-muted{color:#aebac1}
+body.dark-mode .welcome-box,
+body.dark-mode .modal,
+body.dark-mode .more-menu{background:#202c33;color:#e9edef}
+body.dark-mode .more-menu button{background:#202c33;color:#e9edef}
+body.dark-mode .more-menu button:hover{background:#2a3942}
+body.dark-mode .settings-button{background:#00a884;color:#fff}
+body.dark-mode .folder-box,
+body.dark-mode .link-box{background:#2a3942;color:#e9edef}
+body.dark-mode input{background:#2a3942;color:#e9edef;border-color:#43535c}
+body.dark-mode .modal-overlay{background:rgba(0,0,0,.72)}
+body.dark-mode .action-btn{background:#202c33;color:#e9edef;border-color:#43535c}
+body.dark-mode .info-label{color:#aebac1}
+body.dark-mode .search-input{background:#2a3942;color:#e9edef}
+body.dark-mode .search-input::placeholder{color:#aebac1}
+body.dark-mode .file-view{color:#e9edef}
+body.dark-mode .file-card{background:#202c33;color:#e9edef}
+.theme-switcher{display:flex;gap:10px;margin-top:10px}
+.theme-switcher .theme-btn{flex:1}
+
 /* =========================================================
    TOAST
 ========================================================= */
@@ -883,13 +922,17 @@ button{
 .toast{
     position:fixed;
     left:50%;
-    bottom:28px;
-    z-index:10000;
-    transform:translateX(-50%);
-    background:#111827;
+    top:50%;
+    left:50%;
+    z-index:30000;
+    transform:translate(-50%,-50%);
+    background:rgba(17,24,39,.96);
     color:#fff;
-    padding:12px 18px;
-    border-radius:8px;
+    padding:15px 22px;
+    border-radius:14px;
+    box-shadow:0 10px 35px rgba(0,0,0,.28);
+    font-size:15px;
+    font-weight:600;
     display:none;
     max-width:90vw;
     text-align:center;
@@ -973,7 +1016,7 @@ button{
     .floating-plus{
         left:auto;
         right:18px;
-        bottom:92px;
+        bottom:118px;
         width:58px;
         height:58px;
     }
@@ -1187,10 +1230,6 @@ button{
     class="more-menu"
 >
 
-    <button onclick="googleLogin()">
-        🔐 Google аккаунт тандоо
-    </button>
-
     <button onclick="openSettings()">
         ⚙️ Настройка
     </button>
@@ -1199,9 +1238,6 @@ button{
         🔄 Жаңыртуу
     </button>
 
-    <button onclick="logoutUser()">
-        🚪 Аккаунттан чыгуу
-    </button>
 
 </div>
 
@@ -1420,18 +1456,22 @@ button{
             <h3>🔐 Google аккаунт</h3>
 
             <div class="settings-muted" id="googleAccountStatus">
-                Google аккаунт тандала элек. Басканда аккаунт тандоо терезеси ачылат.
+                Google аккаунт башында бир жолу тандалат. Кийин башка аккаунт тандоо мүмкүн эмес.
             </div>
-
-            <button
-                class="settings-button"
-                onclick="googleLogin()"
-            >
-                🔐 Google аккаунт тандоо
-            </button>
 
         </div>
 
+
+        <!-- THEME -->
+
+        <div class="settings-item">
+            <h3>🎨 Тема</h3>
+            <div class="settings-muted">Күндүзгү же түнкү көрүнүштү тандаңыз.</div>
+            <div class="theme-switcher">
+                <button type="button" class="settings-button theme-btn" onclick="setTheme('light')">☀️ Күндүзгү</button>
+                <button type="button" class="settings-button theme-btn" onclick="setTheme('dark')">🌙 Түнкү</button>
+            </div>
+        </div>
 
         <!-- INFO -->
 
@@ -1541,76 +1581,27 @@ function loadGoogleIdentityServices(callback){
 }
 
 function googleLogin(){
-    closeMoreMenu();
-
+    // Аккаунт башында гана тандалат. Кийин кайра аккаунт тандоочу терезе ачылбайт.
+    if(currentUser){
+        showToast("ℹ️ Бул Google аккаунт мурун тандалган.");
+        return;
+    }
     loadGoogleIdentityServices(function(){
-
-        /*
-         * Ар бир жолу "Google аккаунт менен кирүү" басылганда
-         * аккаунт тандоо терезеси ачылат.
-         *
-         * prompt:"select_account" мааниси атайын колдонулууда.
-         * Ошондуктан мурда кирген аккаунт автоматтык тандалып
-         * кетпейт — Google аккаунт тандоо экраны чыгат.
-         */
         if(!tokenClient){
-
-            tokenClient =
-                google.accounts.oauth2.initTokenClient({
-
-                    client_id:
-                        GOOGLE_CLIENT_ID,
-
-                    scope:
-                        DRIVE_SCOPE,
-
-                    include_granted_scopes:
-                        true,
-
-                    callback:
-                        async function(response){
-
-                            if(
-                                response &&
-                                response.access_token
-                            ){
-
-                                driveAccessToken =
-                                    response.access_token;
-
-                                await loadGoogleUser();
-
-                                showToast(
-                                    "✅ Google аккаунт тандалды"
-                                );
-
-                            }else{
-
-                                showToast(
-                                    "Google аккаунт тандоо аяктаган жок."
-                                );
-
-                            }
-
-                        }
-
-                });
-
+            tokenClient=google.accounts.oauth2.initTokenClient({
+                client_id:GOOGLE_CLIENT_ID,
+                scope:DRIVE_SCOPE,
+                include_granted_scopes:true,
+                callback:async function(response){
+                    if(response?.access_token){
+                        driveAccessToken=response.access_token;
+                        await loadGoogleUser();
+                        showToast("✅ Google аккаунт тандалды");
+                    }else showToast("Google аккаунт тандалган жок.");
+                }
+            });
         }
-
-        /*
-         * Эң маанилүү жер:
-         * ар дайым select_account.
-         *
-         * Телефондо/компьютерде Google'га киргизилген
-         * жеткиликтүү аккаунттардын арасынан тандоо
-         * үчүн Google'дун өзүнүн аккаунт тандоо терезеси ачылат.
-         */
-        tokenClient.requestAccessToken({
-            prompt:
-                "select_account"
-        });
-
+        tokenClient.requestAccessToken({prompt:"select_account"});
     });
 }
 
@@ -1673,37 +1664,31 @@ function saveSelectedFolder(folder){localStorage.setItem(folderStorageKey(),JSON
 function ensureDriveToken(){
     return new Promise(function(resolve,reject){
         if(driveAccessToken){resolve(driveAccessToken);return;}
-        if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){
-            reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));
-            return;
-        }
+        if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));return;}
         loadGoogleIdentityServices(function(){
             if(!tokenClient){
                 tokenClient=google.accounts.oauth2.initTokenClient({
                     client_id:GOOGLE_CLIENT_ID,
                     scope:DRIVE_SCOPE,
+                    include_granted_scopes:true,
                     callback:function(response){
                         if(response?.access_token){
                             driveAccessToken=response.access_token;
                             loadGoogleUser().catch(()=>{});
                             resolve(driveAccessToken);
-                        }else reject(new Error("Google token алынган жок."));
+                        }else reject(new Error("Google уруксаты алынган жок."));
                     }
                 });
             }else{
-                const old=tokenClient.callback;
                 tokenClient.callback=function(response){
-                    tokenClient.callback=old;
                     if(response?.access_token){driveAccessToken=response.access_token;resolve(driveAccessToken);}
-                    else reject(new Error("Google token алынган жок."));
+                    else reject(new Error("Google уруксаты алынган жок."));
                 };
             }
-            // Папка тандоодо мурун тандалган Google аккаунттун
-            // уруксаты бар болсо кайра аккаунт тандатпайбыз.
-            // Аккаунтту атайын ⋮ -> Google аккаунт менен кирүү
-            // басканда гана "select_account" ачылат.
+            // Мурун тандалган аккаунт гана колдонулат. login_hint аккаунтту бекитет.
             tokenClient.requestAccessToken({
-                prompt:""
+                prompt: currentUser ? "none" : "select_account",
+                login_hint: currentUser?.email || undefined
             });
         });
     });
@@ -1935,11 +1920,6 @@ function openFile(file){
             <div class="info-block"><label class="info-label">📁 Файл номери</label><div class="info-value">${escapeHTML(file.number)}</div></div>\
             <div class="info-block"><label class="info-label">🔗 Ссылка</label><div class="link-box">${escapeHTML(shareUrl)}</div></div>\
             <div class="qr-section"><label class="info-label">📱 QR код</label><img src="${qrURL}" alt="QR код"></div>\
-            <div class="file-composer">\
-                <input id="fileNoteInput" type="text" placeholder="Жазуу..." maxlength="500" onkeydown="if(event.key==='Enter')sendFileNote('${escapeAttr(file.id)}')">\
-                <button type="button" onclick="sendFileNote('${escapeAttr(file.id)}')">➤</button>\
-            </div>\
-            <div id="fileNotes" class="file-notes"></div>\
             <div class="action-row">\
                 <button class="action-btn" onclick="shareLink('${escapeAttr(shareUrl)}')">↗️ Бөлүшүү</button>\
                 <button class="action-btn" onclick="copyText('${escapeAttr(shareUrl)}')">🔗 Ссылкасын копировать кылуу</button>\
@@ -2025,55 +2005,21 @@ function updateDriveFolderBox(){
     box.textContent=folder?"📁 Папка: "+folder.name+"\nID: "+folder.id:"📁 Папка тандала элек. Видео Google Drive'дын негизги папкасына сакталат.";
 }
 
-function selectDriveFolder(){
+async function selectDriveFolder(){
     closeMoreMenu();
-
-    // Picker settings модалдын артында көрүнбөй калбашы үчүн
-    // папка тандоо басылган замат настройка терезесин жабабыз.
     closeModal("settingsModal");
-
-    if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){
-        showToast("❌ Google Client ID туура эмес.");
+    if(!currentUser){
+        showToast("🔐 Алгач сайт ачылганда Google аккаунтту тандаңыз.");
+        googleLogin();
         return;
     }
-    if(!GOOGLE_API_KEY || GOOGLE_API_KEY.startsWith("YOUR_")){
-        showToast("❌ Google API Key туура эмес.");
-        return;
+    try{
+        const token=await ensureDriveToken();
+        loadGooglePicker(token);
+    }catch(e){
+        console.error(e);
+        showToast("❌ Google Drive уруксаты алынган жок. Аккаунт башында бир жолу тандалсын.");
     }
-
-    // Токен бар болсо — Google Picker дароо ачылат.
-    if(driveAccessToken){
-        loadGooglePicker(driveAccessToken);
-        return;
-    }
-
-    // Биринчи жолу GitHub Pages'тен киргенде Google уруксаты керек.
-    // Уруксат бүткөндөн кийин Picker автоматтык түрдө ачылат.
-    window.takrirOpenPickerAfterLogin = true;
-
-    loadGoogleIdentityServices(function(){
-        if(!tokenClient){
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: DRIVE_SCOPE,
-                include_granted_scopes: true,
-                callback: async function(response){
-                    if(response && response.access_token){
-                        driveAccessToken = response.access_token;
-                        try{ await loadGoogleUser(); }catch(e){}
-                        if(window.takrirOpenPickerAfterLogin){
-                            window.takrirOpenPickerAfterLogin = false;
-                            loadGooglePicker(driveAccessToken);
-                        }
-                    }else{
-                        window.takrirOpenPickerAfterLogin = false;
-                        showToast("Google аккаунт тандоо аяктаган жок.");
-                    }
-                }
-            });
-        }
-        tokenClient.requestAccessToken({prompt:"select_account"});
-    });
 }
 
 function loadGooglePicker(token){
@@ -2103,34 +2049,32 @@ function loadGooglePicker(token){
 }
 function createPicker(accessToken){
     try{
-        // Settings модалын сөзсүз жабабыз — Picker өзүнчө үстүнкү терезе болуп ачылат.
         closeModal("settingsModal");
         const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS);
         view.setIncludeFolders(true);
         view.setSelectFolderEnabled(true);
-        const picker=new google.picker.PickerBuilder()
-            .setDeveloperKey(GOOGLE_API_KEY)
+        let builder=new google.picker.PickerBuilder()
             .setAppId(GOOGLE_APP_ID)
             .setOAuthToken(accessToken)
-            .setOrigin(window.location.protocol + "//" + window.location.host)
+            .setOrigin(window.location.protocol+"//"+window.location.host)
             .addView(view)
             .setCallback(function(data){
                 if(data.action===google.picker.Action.PICKED){
-                    const d=data.docs && data.docs[0];
+                    const d=data.docs&&data.docs[0];
                     if(d){
                         saveSelectedFolder({id:d.id,name:d.name});
                         updateDriveFolderBox();
-                        showToast("✅ Google Drive папка тандалды.");
+                        showToast("✅ Google Drive папка тандалды");
                     }
-                } else if(data.action===google.picker.Action.CANCEL){
-                    showToast("Папка тандоо жабылды.");
                 }
-            })
-            .build();
+            });
+        // Бул версияда жараксыз болуп жаткан Browser API key'ди Picker'ге жибербейбиз.
+        // Google'дун учурдагы Picker API'синде OAuth token + project App ID менен курууга болот.
+        const picker=builder.build();
         picker.setVisible(true);
     }catch(e){
         console.error("Google Picker error",e);
-        showToast("❌ Google Picker ачылган жок: "+(e.message||"ката"));
+        showToast("❌ Google Picker ачылган жок. Google Drive API/Picker API настройкасын текшериңиз.");
     }
 }
 
@@ -2155,7 +2099,28 @@ async function syncFilesFromDrive(){
         renderChatList();
     }catch(e){console.warn("Drive файлдарын жаңыртуу мүмкүн болгон жок",e);}
 }
-function refreshFiles(){closeMoreMenu();if(driveAccessToken)syncFilesFromDrive();else renderChatList();showToast("🔄 Жаңыртылды.");}
+async function refreshFiles(){
+    closeMoreMenu();
+    try{
+        if(!currentUser){renderChatList();showToast("ℹ️ Катталган файлдар жаңыртылды");return;}
+        const token=await ensureDriveToken();
+        await syncFilesFromDrive();
+        showToast("✅ Катталгандар жаңыртылды");
+    }catch(e){
+        renderChatList();
+        showToast("⚠️ Жаңыртуу аяктады, бирок Google Drive жеткиликтүү эмес");
+    }
+}
+
+function setTheme(theme, silent=false){
+    const dark=theme==="dark";
+    document.body.classList.toggle("dark-mode",dark);
+    localStorage.setItem("takrir_theme",dark?"dark":"light");
+    if(!silent) showToast(dark?"🌙 Түнкү режим күйгүзүлдү":"☀️ Күндүзгү режим күйгүзүлдү");
+}
+function restoreTheme(){setTheme(localStorage.getItem("takrir_theme")==="dark"?"dark":"light", true);}
+
+
 function logoutUser(){driveAccessToken=null;currentUser=null;localStorage.removeItem("takrir_google_user");updateUserUI();showToast("Аккаунттан чыктыңыз.");}
 function showToast(message){
     const toast=document.getElementById("toast");toast.textContent=message;toast.style.display="block";clearTimeout(window.takrirToastTimer);window.takrirToastTimer=setTimeout(()=>toast.style.display="none",2800);
@@ -2192,15 +2157,31 @@ window.addEventListener("popstate", function(event){
     }
 });
 
+let pullStartY=0, pullTriggered=false;
+document.addEventListener("touchstart",function(e){
+    if(e.touches.length!==1)return;
+    const sc=document.querySelector(".chat-list");
+    if(sc && sc.scrollTop<=0) pullStartY=e.touches[0].clientY; else pullStartY=0;
+    pullTriggered=false;
+},{passive:true});
+document.addEventListener("touchmove",function(e){
+    if(!pullStartY||pullTriggered||e.touches.length!==1)return;
+    const dy=e.touches[0].clientY-pullStartY;
+    if(dy>80){pullTriggered=true;refreshFiles();}
+},{passive:true});
+
 document.addEventListener("DOMContentLoaded",async function(){
     if(!history.state || !history.state.takrirPage){
         history.replaceState({takrirPage:"home"},"",window.location.pathname+window.location.search);
     }
+    restoreTheme();
     restoreGoogleUser();
     renderChatList();
     showWelcome();
-    // Ошол эле Google аккаунт менен башка телефон/компьютерден киргенде Drive'дагы номерлерди автоматтык жүктөйбүз.
-    if(currentUser){
+    // Google аккаунт биринчи жолу гана башында тандалат. Кийин кайра тандоо жок.
+    if(!currentUser){
+        setTimeout(()=>googleLogin(),350);
+    }else{
         ensureDriveToken().then(()=>syncFilesFromDrive()).catch(()=>{});
     }
     /* Эски каттоо болсо, Google аккаунт киргенден кийин Drive'дан кайра жүктөйт. */
