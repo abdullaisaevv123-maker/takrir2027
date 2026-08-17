@@ -877,6 +877,30 @@ button{
 }
 
 
+
+/* =========================================================
+   CUSTOM DRIVE FOLDER PICKER
+========================================================= */
+.folder-picker-modal{padding:20px;}
+.folder-picker-header{display:flex;align-items:center;justify-content:space-between;gap:15px;}
+.folder-close-btn{border:0;background:#f0f2f5;color:#54656f;width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;}
+.folder-close-btn:hover{background:#e5e7eb;}
+.drive-folder-list{margin-top:14px;max-height:55vh;overflow:auto;border:1px solid #e5e7eb;border-radius:12px;background:#fff;}
+.drive-folder-row{width:100%;display:flex;align-items:center;gap:12px;border:0;border-bottom:1px solid #edf0f1;background:#fff;text-align:left;padding:13px 14px;cursor:pointer;color:#111b21;font-size:15px;}
+.drive-folder-row:last-child{border-bottom:0;}
+.drive-folder-row:hover{background:#f0f2f5;}
+.drive-folder-row.selected{background:#e7f7f2;}
+.drive-folder-icon{font-size:24px;flex:0 0 28px;}
+.drive-folder-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.drive-folder-check{color:#00a884;font-size:22px;font-weight:700;}
+.folder-loading,.folder-empty,.folder-error{padding:30px 15px;text-align:center;color:#667781;line-height:1.6;}
+.folder-error{color:#b42318;}
+body.dark-mode .folder-close-btn{background:#2a3942;color:#e9edef;}
+body.dark-mode .drive-folder-list{background:#202c33;border-color:#33434d;}
+body.dark-mode .drive-folder-row{background:#202c33;color:#e9edef;border-color:#33434d;}
+body.dark-mode .drive-folder-row:hover{background:#2a3942;}
+body.dark-mode .drive-folder-row.selected{background:#174f43;}
+
 /* =========================================================
    THEME
 ========================================================= */
@@ -1504,6 +1528,23 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
 </div>
 
+<!-- =======================================================
+ GOOGLE DRIVE FOLDER PICKER — API KEYсиз, OAuth аркылуу
+======================================================= -->
+<div id="folderPickerModal" class="modal-overlay" onclick="if(event.target===this)closeFolderPicker()">
+    <div class="modal large folder-picker-modal">
+        <div class="folder-picker-header">
+            <div>
+                <h2 style="margin-bottom:4px">📁 Google Drive папкасын тандоо</h2>
+                <div class="settings-muted">Ушул аккаунттун Drive папкалары</div>
+            </div>
+            <button type="button" class="folder-close-btn" onclick="closeFolderPicker()">✕</button>
+        </div>
+        <input id="driveFolderSearch" type="text" placeholder="🔎 Папка издөө..." oninput="filterDriveFolders()" style="margin-top:15px">
+        <div id="driveFolderList" class="drive-folder-list"></div>
+    </div>
+</div>
+
 <!-- WhatsApp сыяктуу туруктуу +: файл ачылганда да көрүнөт -->
 <button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="openNumberModal()">＋</button>
 
@@ -1547,7 +1588,7 @@ const DRIVE_SCOPE = [
     "openid",
     "email",
     "profile",
-    "https://www.googleapis.com/auth/drive.file"
+    "https://www.googleapis.com/auth/drive"
 ].join(" ");
 
 let currentUser = null;
@@ -1666,26 +1707,33 @@ function ensureDriveToken(){
         if(driveAccessToken){resolve(driveAccessToken);return;}
         if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));return;}
         loadGoogleIdentityServices(function(){
+            let consentRetried=false;
+            const finish=function(response){
+                if(response?.access_token){
+                    driveAccessToken=response.access_token;
+                    resolve(driveAccessToken);
+                    return;
+                }
+                // Жаңы Drive scope биринчи жолу берилсе, ошол эле аккаунт үчүн
+                // уруксатты сурайбыз. login_hint башка аккаунт тандоого жол бербейт.
+                if(!consentRetried && currentUser?.email && response?.error){
+                    consentRetried=true;
+                    tokenClient.requestAccessToken({prompt:"consent",login_hint:currentUser.email});
+                    return;
+                }
+                reject(new Error(response?.error_description || response?.error || "Google Drive уруксаты алынган жок."));
+            };
             if(!tokenClient){
                 tokenClient=google.accounts.oauth2.initTokenClient({
                     client_id:GOOGLE_CLIENT_ID,
                     scope:DRIVE_SCOPE,
                     include_granted_scopes:true,
-                    callback:function(response){
-                        if(response?.access_token){
-                            driveAccessToken=response.access_token;
-                            loadGoogleUser().catch(()=>{});
-                            resolve(driveAccessToken);
-                        }else reject(new Error("Google уруксаты алынган жок."));
-                    }
+                    callback:finish
                 });
             }else{
-                tokenClient.callback=function(response){
-                    if(response?.access_token){driveAccessToken=response.access_token;resolve(driveAccessToken);}
-                    else reject(new Error("Google уруксаты алынган жок."));
-                };
+                tokenClient.callback=finish;
             }
-            // Мурун тандалган аккаунт гана колдонулат. login_hint аккаунтту бекитет.
+            // Мурун тандалган аккаунт гана колдонулат. login_hint башка аккаунт тандоочу терезени ачпайт.
             tokenClient.requestAccessToken({
                 prompt: currentUser ? "none" : "select_account",
                 login_hint: currentUser?.email || undefined
@@ -2015,7 +2063,7 @@ async function selectDriveFolder(){
     }
     try{
         const token=await ensureDriveToken();
-        loadGooglePicker(token);
+        openFolderPicker();
     }catch(e){
         console.error(e);
         showToast("❌ Google Drive уруксаты алынган жок. Аккаунт башында бир жолу тандалсын.");
@@ -2023,59 +2071,77 @@ async function selectDriveFolder(){
 }
 
 function loadGooglePicker(token){
-    if(!token){
-        showToast("❌ Google Drive уруксаты алынган жок.");
-        return;
-    }
-    if(window.google?.picker){createPicker(token);return;}
-    const old=document.getElementById("googlePickerScript");
-    if(old){
-        const t=setInterval(()=>{
-            if(window.google?.picker){clearInterval(t);createPicker(token);}
-        },100);
-        setTimeout(()=>clearInterval(t),10000);
-        return;
-    }
-    const script=document.createElement("script");
-    script.id="googlePickerScript";
-    script.src="https://apis.google.com/js/api.js";
-    script.onload=function(){
-        gapi.load("picker",{callback:function(){createPicker(token);}});
-    };
-    script.onerror=function(){
-        showToast("❌ Google Picker жүктөлгөн жок. Google Picker API күйгүзүлгөнүн текшериңиз.");
-    };
-    document.head.appendChild(script);
+    // Google Picker API key талап кылгандыктан, анын ордуна OAuth менен
+    // түздөн-түз Drive API аркылуу папкаларды көрсөтөбүз. Ошентип
+    // "The API developer key is invalid" деген ката толук жоголот.
+    openFolderPicker();
 }
-function createPicker(accessToken){
-    try{
-        closeModal("settingsModal");
-        const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS);
-        view.setIncludeFolders(true);
-        view.setSelectFolderEnabled(true);
-        let builder=new google.picker.PickerBuilder()
-            .setAppId(GOOGLE_APP_ID)
-            .setOAuthToken(accessToken)
-            .setOrigin(window.location.protocol+"//"+window.location.host)
-            .addView(view)
-            .setCallback(function(data){
-                if(data.action===google.picker.Action.PICKED){
-                    const d=data.docs&&data.docs[0];
-                    if(d){
-                        saveSelectedFolder({id:d.id,name:d.name});
-                        updateDriveFolderBox();
-                        showToast("✅ Google Drive папка тандалды");
-                    }
-                }
-            });
-        // Бул версияда жараксыз болуп жаткан Browser API key'ди Picker'ге жибербейбиз.
-        // Google'дун учурдагы Picker API'синде OAuth token + project App ID менен курууга болот.
-        const picker=builder.build();
-        picker.setVisible(true);
-    }catch(e){
-        console.error("Google Picker error",e);
-        showToast("❌ Google Picker ачылган жок. Google Drive API/Picker API настройкасын текшериңиз.");
+
+async function openFolderPicker(){
+    if(!currentUser){
+        showToast("🔐 Алгач Google аккаунтту тандаңыз.");
+        return;
     }
+    try{
+        const token=await ensureDriveToken();
+        document.getElementById("folderPickerModal").style.display="flex";
+        const list=document.getElementById("driveFolderList");
+        list.innerHTML='<div class="folder-loading">⏳ Google Drive папкалары жүктөлүүдө...</div>';
+        const q="mimeType='application/vnd.google-apps.folder' and trashed=false";
+        const url="https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+
+            "&spaces=drive&pageSize=1000&orderBy=name&fields=files(id,name,parents,createdTime,modifiedTime)";
+        const r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+        if(!r.ok){
+            const text=await r.text();
+            throw new Error("Drive папкаларын алуу мүмкүн болгон жок: "+text);
+        }
+        const data=await r.json();
+        const folders=data.files||[];
+        window.takrirDriveFolders=folders;
+        renderDriveFolderList(folders);
+    }catch(e){
+        console.error(e);
+        document.getElementById("folderPickerModal").style.display="flex";
+        document.getElementById("driveFolderList").innerHTML=
+            '<div class="folder-error">❌ Папкаларды алуу мүмкүн болгон жок.<br><small>'+escapeHTML(e.message||"")+'</small></div>';
+        showToast("❌ Google Drive папкаларын ачууда ката кетти.");
+    }
+}
+
+function renderDriveFolderList(folders){
+    const list=document.getElementById("driveFolderList");
+    const selected=getSelectedFolder();
+    if(!folders.length){
+        list.innerHTML="<div class='folder-empty'>📁 Google Drive'да папка жок.</div>";
+        return;
+    }
+    list.innerHTML=folders.map(f=>{
+        const isSelected=selected && String(selected.id)===String(f.id);
+        return `<button type="button" class="drive-folder-row ${isSelected?'selected':''}" onclick="chooseDriveFolder('${escapeAttr(f.id)}')">
+            <span class="drive-folder-icon">📁</span>
+            <span class="drive-folder-name">${escapeHTML(f.name)}</span>
+            ${isSelected?'<span class="drive-folder-check">✓</span>':''}
+        </button>`;
+    }).join('');
+}
+
+function filterDriveFolders(){
+    const q=(document.getElementById("driveFolderSearch").value||"").trim().toLowerCase();
+    const folders=window.takrirDriveFolders||[];
+    renderDriveFolderList(folders.filter(f=>String(f.name||"").toLowerCase().includes(q)));
+}
+
+function chooseDriveFolder(id){
+    const folder=(window.takrirDriveFolders||[]).find(f=>String(f.id)===String(id));
+    if(!folder)return;
+    saveSelectedFolder({id:folder.id,name:folder.name});
+    updateDriveFolderBox();
+    closeModal('folderPickerModal');
+    showToast("✅ «"+folder.name+"» папка тандалды");
+}
+
+function closeFolderPicker(){
+    closeModal('folderPickerModal');
 }
 
 async function syncFilesFromDrive(){
