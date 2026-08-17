@@ -1074,7 +1074,7 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
     z-index: 20000 !important;
 }
 </style>
-</head>
+<style>.folder-row-open.folder-open-big{min-width:110px!important;min-height:44px!important;padding:10px 18px!important;border-radius:12px!important;font-size:16px!important;font-weight:700!important;cursor:pointer!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}.folder-row-select{display:none!important}.folder-picker-actions{justify-content:flex-end!important}</style></head>
 
 <body>
 
@@ -1095,7 +1095,7 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
             <div class="sidebar-header">
 
-                <div class="profile">
+                <div class="profile" onclick="document.getElementById('profileImageInput')?.click()" title="Профиль сүрөтүн өзгөртүү">
 
                     <img
                         id="userAvatar"
@@ -1103,22 +1103,15 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
                         src=""
                         alt="avatar"
                     >
+                    <input id="profileImageInput" type="file" accept="image/*" style="display:none" onchange="changeProfileImage(event)">
 
                     <div class="profile-info">
 
-                        <div
-                            id="userName"
-                            class="profile-name"
-                        >
-                            Аккаунт
-                        </div>
-
-                        <div
-                            id="userEmail"
-                            class="profile-email"
-                        >
-                            -
-                        </div>
+                        <div class="profile-name-row">
+                        <div id="userName" class="profile-name">Такрир</div>
+                        <button id="userYear" class="profile-year" type="button" onclick="event.stopPropagation();toggleYearMenu()">2027</button>
+                    </div>
+                    <div id="userEmail" class="profile-email" style="display:none">-</div>
 
                     </div>
 
@@ -1152,6 +1145,21 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
                     oninput="renderChatList()"
                 >
 
+            </div>
+
+            <div class="file-filters" id="fileFilters">
+                <button class="filter-btn active" data-filter="all" onclick="setFileFilter('all')">Баары</button>
+                <button class="filter-btn" data-filter="unread" onclick="setFileFilter('unread')">Окулбаган</button>
+                <button class="filter-btn" data-filter="import" onclick="openBulkImport()">Киргизүү</button>
+                <button class="filter-btn" data-filter="duplicates" onclick="setFileFilter('duplicates')">Толук катталгандар</button>
+            </div>
+
+            <div id="yearMenu" class="year-menu" style="display:none">
+                <div class="year-title">Жылды тандаңыз</div>
+                <button onclick="selectTakrirYear(2027)">2027</button>
+                <button onclick="selectTakrirYear(2028)">2028</button>
+                <button onclick="selectTakrirYear(2029)">2029</button>
+                <button onclick="selectTakrirYear(2030)">2030</button>
             </div>
 
 
@@ -1562,19 +1570,31 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
             <button type="button" class="folder-close-btn" onclick="closeFolderPicker()">✕</button>
         </div>
         <div class="folder-picker-toolbar">
-            <button type="button" id="folderUpBtn" class="folder-up-btn" onclick="folderPickerUp()" disabled>← Жогору</button>
+            <button type="button" id="folderUpBtn" class="folder-up-btn" onclick="folderPickerUp()" disabled>← Артка</button>
             <input id="driveFolderSearch" type="text" placeholder="🔎 Папка издөө..." oninput="filterDriveFolders()">
         </div>
         <div id="driveFolderList" class="drive-folder-list"></div>
         <div class="folder-picker-actions">
             <button type="button" class="btn-cancel" onclick="closeFolderPicker()">Жабуу</button>
-            <button type="button" id="chooseCurrentFolderBtn" class="btn-green" onclick="chooseCurrentFolder()" disabled>📁 Ушул папканы тандоо</button>
         </div>
     </div>
 </div>
 
 <!-- WhatsApp сыяктуу туруктуу +: файл ачылганда да көрүнөт -->
 <button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="openNumberModal()">＋</button>
+
+<!-- BULK FILE NUMBER IMPORT -->
+<div id="bulkImportModal" class="modal-overlay" onclick="if(event.target===this)closeBulkImport()">
+  <div class="modal" style="max-width:620px;width:92%">
+    <h2>📥 Файл номерлерин киргизүү</h2>
+    <p class="settings-muted">Файл номерлерин ар бир сапка бирден же үтүр/боштук менен көчүрүп коюңуз.</p>
+    <textarea id="bulkImportInput" style="width:100%;min-height:220px;border:1px solid #d9e1e5;border-radius:12px;padding:12px;font-size:16px;box-sizing:border-box" placeholder="001234\n001235\n001236"></textarea>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+      <button class="settings-button" type="button" onclick="closeBulkImport()">Жабуу</button>
+      <button class="settings-button" type="button" style="background:#00a884;color:white" onclick="importBulkNumbers()">Баарын сактоо</button>
+    </div>
+  </div>
+</div>
 
 <!-- =======================================================
  TOAST
@@ -1674,7 +1694,7 @@ async function loadGoogleUser(){
         if(!r.ok) throw new Error("Google userinfo error");
         currentUser=await r.json();
         localStorage.setItem("takrir_google_user",JSON.stringify(currentUser));
-        updateUserUI();
+        updateUserUI(); loadProfileImage();
         showToast("✅ Google аккаунт менен кирдиңиз");
         await syncFilesFromDrive();
     }catch(e){
@@ -1687,11 +1707,11 @@ function restoreGoogleUser(){
     try{
         currentUser=JSON.parse(localStorage.getItem("takrir_google_user")||"null");
     }catch(e){currentUser=null;}
-    updateUserUI();
+    updateUserUI(); loadProfileImage();
 }
 
 function updateUserUI(){
-    const name=currentUser?.name||"Google аккаунт";
+    const name="Такрир";
     const email=currentUser?.email||"Google аккаунт тандоо керек";
     const picture=currentUser?.picture||createAvatar(name);
     ["userAvatar","settingsAvatar"].forEach(id=>{
@@ -1780,7 +1800,12 @@ function openNumberModal(){
     document.getElementById("numberModal").style.display="flex";
     setTimeout(()=>document.getElementById("fileNumberInput").focus(),100);
 }
-function closeModal(id){const el=document.getElementById(id);if(el)el.style.display="none"; if(id==="settingsModal"){const plus=document.getElementById("floatingPlus"); if(plus && !document.getElementById("appShell")?.classList.contains("file-open")) plus.style.display="flex";}}
+function closeModal(id){
+    const el=document.getElementById(id); if(!el)return;
+    if(id==="settingsModal" && history.state?.takrirPage==="settings"){ history.back(); return; }
+    el.style.display="none";
+    if(id==="settingsModal"){ const plus=document.getElementById("floatingPlus"); if(plus && !document.getElementById("appShell")?.classList.contains("file-open")) plus.style.display="flex"; }
+}
 function continueNumber(){
     const input=document.getElementById("fileNumberInput");
     let number=input.value.trim().replace(/\s+/g,"");
@@ -1966,6 +1991,98 @@ async function uploadVideoToDrive(file,number,onProgress){
     return {...uploaded,id,url,folder};
 }
 
+let selectedFileIds=new Set();
+let longPressTimer=null;
+let lastTouchTime=0;
+let selectionMode=false;
+
+function clearSelectedFiles(){
+    selectedFileIds.clear(); selectionMode=false;
+    document.getElementById("selectionBar")?.remove();
+    renderChatList();
+}
+function toggleSelectedFile(id){
+    const key=String(id);
+    if(selectedFileIds.has(key)) selectedFileIds.delete(key); else selectedFileIds.add(key);
+    selectionMode=selectedFileIds.size>0;
+    renderChatList();
+    renderSelectionBar();
+    if(!selectedFileIds.size) selectionMode=false;
+}
+function renderSelectionBar(){
+    let bar=document.getElementById("selectionBar");
+    if(!selectedFileIds.size){ if(bar)bar.remove(); return; }
+    if(!bar){
+        bar=document.createElement("div");
+        bar.id="selectionBar";
+        bar.className="selection-bar";
+        document.body.appendChild(bar);
+    }
+    const unreadSelected=getFiles().filter(f=>selectedFileIds.has(String(f.id)) && f.unread).length;
+    const readSelected=getFiles().filter(f=>selectedFileIds.has(String(f.id)) && !f.unread).length;
+    bar.innerHTML=`<span>Тандалды: ${selectedFileIds.size}</span>
+      <button onclick="deleteSelectedFiles()">🗑 Өчүрүү</button>
+      ${unreadSelected?'<button onclick="markSelectedRead()">✓ Окулду</button>':''}
+      ${readSelected?'<button onclick="markSelectedUnread()">● Окулбаганга</button>':''}
+      <button onclick="clearSelectedFiles()">✕</button>`;
+}
+function deleteSelectedFiles(){
+    if(!selectedFileIds.size)return;
+    if(!confirm("Тандалган файл номерлерин сайттагы тизмеден өчүрөсүзбү? Google Drive'дагы видеолор сакталат."))return;
+    saveFiles(getFiles().filter(f=>!selectedFileIds.has(String(f.id))));
+    const n=selectedFileIds.size; selectedFileIds.clear(); selectionMode=false; document.getElementById("selectionBar")?.remove();
+    renderChatList(); showToast("✅ "+n+" файл өчүрүлдү. Google Drive'дагы видеолор сакталды.");
+}
+function markSelectedRead(){
+    const ids=new Set([...selectedFileIds].map(String));
+    saveFiles(getFiles().map(f=>ids.has(String(f.id))?{...f,unread:false}:f));
+    selectedFileIds.clear(); selectionMode=false; document.getElementById("selectionBar")?.remove(); renderChatList();
+    showToast("✓ Окулган деп белгиленди");
+}
+function markSelectedUnread(){
+    const ids=new Set([...selectedFileIds].map(String));
+    saveFiles(getFiles().map(f=>ids.has(String(f.id))?{...f,unread:true}:f));
+    selectedFileIds.clear(); selectionMode=false; document.getElementById("selectionBar")?.remove(); renderChatList();
+    showToast("● Окулбаган деп белгиленди");
+}
+function openFileActions(id){
+    const f=getFiles().find(x=>String(x.id)===String(id)); if(!f)return;
+    selectedFileIds=new Set([String(id)]);
+    selectionMode=true;
+    renderChatList(); renderSelectionBar();
+}
+function handleChatPointerDown(event,id){
+    if(event.target.closest(".chat-more-btn")) return;
+    if(event.button!==undefined && event.button!==0 && event.pointerType!=="touch") return;
+    clearTimeout(longPressTimer);
+    window.takrirLongPressTriggered=false;
+    longPressTimer=setTimeout(()=>{
+        window.takrirLongPressTriggered=true;
+        toggleSelectedFile(id);
+        if(navigator.vibrate) try{navigator.vibrate(35);}catch(e){}
+    },2000);
+}
+function handleChatPointerUp(event,id){
+    if(event.target.closest(".chat-more-btn")) return;
+    clearTimeout(longPressTimer);
+    if(window.takrirLongPressTriggered){
+        window.takrirLongPressTriggered=false;
+        return;
+    }
+    // Бир номерди 2 секунд кармап тандоо режими башталса,
+    // андан кийинки бир басуулар да тандайт. Режим жок болсо — ачылат.
+    if(selectionMode){ toggleSelectedFile(id); return; }
+    openFileById(id);
+}
+function handleChatPointerCancel(){
+    clearTimeout(longPressTimer);
+    window.takrirLongPressTriggered=false;
+}
+function handleDesktopContext(event,id){
+    // Оң баскыч тандоо кылбайт.
+    // Тандоо үчүн 2 секунд басып кармоо гана колдонулат.
+    return;
+}
 function renderChatList(){
     const list=document.getElementById("chatList");
     const q=(document.getElementById("searchInput")?.value||"").trim().toLowerCase();
@@ -1974,19 +2091,30 @@ function renderChatList(){
         list.innerHTML='<div style="padding:28px;text-align:center;color:#667781">Файл номерлери азырынча жок</div>';
         return;
     }
-    list.innerHTML=files.map(file=>`
-        <div class="chat-item ${file.unread?'unread':''}" onclick="openFileById('${escapeAttr(file.id)}')">
-            <div class="chat-avatar">🎥</div>
+    list.innerHTML=files.map(file=>{
+        const selected=selectedFileIds.has(String(file.id));
+        return `
+        <div class="chat-item ${file.unread?'unread':''} ${selected?'selected-row':''}"
+             data-file-id="${escapeAttr(file.id)}"
+             onpointerdown="handleChatPointerDown(event,'${escapeAttr(file.id)}')"
+             onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')"
+             onpointercancel="handleChatPointerCancel()"
+             ondragstart="return false">
+            <div class="chat-avatar person-avatar" aria-hidden="true"><span>${escapeHTML(String(file.number||""))}</span></div>
             <div class="chat-content">
                 <div class="chat-top">
-                    <div class="chat-name">${escapeHTML(file.number)}${file.unread?'<span class="unread-badge">1</span>':''}</div>
+                    <div class="chat-name">${escapeHTML(file.number)}</div>
                     <div class="chat-time">${escapeHTML(file.date||"")}</div>
                 </div>
-                <div class="chat-preview">🎥 ${escapeHTML(file.name||"Видео")}</div>
+                <div class="chat-preview">${escapeHTML(file.name||"Видео")}</div>
             </div>
-        </div>`).join("");
+            <button type="button" class="chat-more-btn" aria-label="Меню"
+                    onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button>
+        </div>`;
+    }).join("");
 }
 function openFileById(id){const f=getFiles().find(x=>String(x.id)===String(id));if(f)openFile(f);}
+
 
 function openFile(file){
     if(!file)return;
@@ -2012,7 +2140,7 @@ function openFile(file){
     savePageState("file");
     document.getElementById("mainTitle").textContent=file.number;
     document.getElementById("mainSubtitle").textContent="Файл номер: "+file.number;
-    document.getElementById("appShell").classList.add("file-open"); const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="none";
+    document.getElementById("appShell").classList.add("file-open"); const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="flex";
     const videoUrl="https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/preview";
     const shareUrl=file.url||("https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/view?usp=sharing");
     const qrURL="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(shareUrl);
@@ -2050,7 +2178,33 @@ function sendFileNote(fileId){
     input.value=""; renderFileNotes(fileId);
 }
 
+function changeProfileImage(event){
+    const file=event.target.files&&event.target.files[0];
+    if(!file)return;
+    if(!file.type.startsWith('image/')){ showToast('⚠️ Сүрөт гана тандаңыз'); return; }
+    const reader=new FileReader();
+    reader.onload=()=>{
+        const data=reader.result;
+        const key='takrir_profile_image_'+(currentUser?.email||'default');
+        localStorage.setItem(key,data);
+        applyProfileImage(data);
+        showToast('✅ Профиль сүрөтү өзгөртүлдү');
+    };
+    reader.readAsDataURL(file);
+}
+function applyProfileImage(data){
+    const avatar=document.getElementById('userAvatar');
+    const settingsAvatar=document.getElementById('settingsAvatar');
+    if(avatar) avatar.src=data||'';
+    if(settingsAvatar) settingsAvatar.src=data||'';
+}
+function loadProfileImage(){
+    const key='takrir_profile_image_'+(currentUser?.email||'default');
+    applyProfileImage(localStorage.getItem(key)||'');
+}
+
 function showWelcome(){
+    selectedFileIds.clear(); selectionMode=false; document.getElementById("selectionBar")?.remove();
     currentFileId=null;
     sessionStorage.removeItem("takrir_current_file");
     savePageState("home");
@@ -2099,10 +2253,11 @@ function toggleMoreMenu(){
 function closeMoreMenu(){document.getElementById("moreMenu").style.display="none";}
 function openSettings(){
     closeMoreMenu();
-    const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="none";
-    updateUserUI();
+    const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="flex";
+    updateUserUI(); loadProfileImage();
     updateDriveFolderBox();
     document.getElementById("settingsModal").style.display="flex";
+    if(history.state?.takrirPage!=="settings"){ history.pushState({takrirPage:"settings"},"","#settings"); }
 }
 function updateDriveFolderBox(){
     const box=document.getElementById("driveFolderBox");
@@ -2160,7 +2315,6 @@ async function openFolderPicker(folderId=null,folderName="My Drive",pushPath=tru
         updateFolderPickerHeader();
         const list=document.getElementById("driveFolderList");
         list.innerHTML='<div class="folder-loading">⏳ Google Drive папкалары жүктөлүүдө...</div>';
-        document.getElementById("chooseCurrentFolderBtn").disabled=!folderId;
         document.getElementById("folderUpBtn").disabled=window.takrirFolderPath.length===0;
 
         let q="mimeType='application/vnd.google-apps.folder' and trashed=false";
@@ -2193,7 +2347,6 @@ function updateFolderPickerHeader(){
     const parts=window.takrirFolderPath.map(x=>escapeHTML(x.name));
     path.innerHTML="📍 My Drive"+(parts.length?" / "+parts.join(" / "):"");
     document.getElementById("folderUpBtn").disabled=window.takrirFolderPath.length===0;
-    document.getElementById("chooseCurrentFolderBtn").disabled=!current.id;
 }
 
 function renderDriveFolderList(folders){
@@ -2207,17 +2360,24 @@ function renderDriveFolderList(folders){
         const isSelected=selected && String(selected.id)===String(f.id);
         return `<div class="drive-folder-row ${isSelected?'selected':''}">
             <span class="drive-folder-icon">📁</span>
-            <span class="drive-folder-name" onclick="openFolderPicker('${escapeAttr(f.id)}','${escapeAttr(f.name)}',true)">${escapeHTML(f.name)}</span>
-            <button type="button" class="folder-row-select" onclick="chooseFolderDirect('${escapeAttr(f.id)}','${escapeAttr(f.name)}')">${isSelected?'✓ Тандалды':'Тандоо'}</button>
-            <span class="folder-row-open" onclick="openFolderPicker('${escapeAttr(f.id)}','${escapeAttr(f.name)}',true)">Ачуу ›</span>
+            <span class="drive-folder-name" onclick="openFolderPicker('${escapeAttr(f.id)}','${escapeAttr(f.name)}',false)">${escapeHTML(f.name)}</span>
+            <button type="button" class="folder-row-open folder-open-big" onclick="chooseFolderDirect('${escapeAttr(f.id)}','${escapeAttr(f.name)}')">Тандоо ›</button>
         </div>`;
     }).join('');
+}
+async function openFolderAndSelect(id,name){
+    // Папканын атын басуу — ичине кирүү гана. Тандоо өзүнчө баскыч менен болот.
+    await openFolderPicker(id,name,false);
 }
 function chooseFolderDirect(id,name){
     saveSelectedFolder({id:id,name:name});
     updateDriveFolderBox();
-    renderDriveFolderList(window.takrirDriveFolders||[]);
-    showToast("✅ «"+name+"» папкасы тандалды. Видеолор ушул папкага сакталат.");
+    showToast("✅ «"+name+"» тандалды");
+    // Папка тандалгандан кийин дароо настройкага кайтабыз.
+    closeModal('folderPickerModal');
+    const settings=document.getElementById('settingsModal');
+    if(settings){ settings.style.display='flex'; updateUserUI(); loadProfileImage(); updateDriveFolderBox(); }
+    const plus=document.getElementById('floatingPlus'); if(plus)plus.style.display='flex';
 }
 
 function filterDriveFolders(){
@@ -2226,14 +2386,6 @@ function filterDriveFolders(){
     renderDriveFolderList(folders.filter(f=>String(f.name||"").toLowerCase().includes(q)));
 }
 
-function chooseCurrentFolder(){
-    const folder=window.takrirCurrentFolder;
-    if(!folder?.id)return;
-    saveSelectedFolder({id:folder.id,name:folder.name});
-    updateDriveFolderBox();
-    closeFolderPicker();
-    showToast("✅ «"+folder.name+"» папка тандалды");
-}
 
 function folderPickerUp(){
     const path=window.takrirFolderPath||[];
@@ -2301,7 +2453,20 @@ function setTheme(theme, silent=false){
 function restoreTheme(){setTheme(localStorage.getItem("takrir_theme")==="dark"?"dark":"light", true);}
 
 
-function logoutUser(){driveAccessToken=null;currentUser=null;localStorage.removeItem("takrir_google_user");updateUserUI();showToast("Аккаунттан чыктыңыз.");}
+function logoutUser(){driveAccessToken=null;currentUser=null;localStorage.removeItem("takrir_google_user");updateUserUI(); loadProfileImage();showToast("Аккаунттан чыктыңыз.");}
+function openBulkImport(){
+  const m=document.getElementById('bulkImportModal'); if(m){m.style.display='flex';setTimeout(()=>document.getElementById('bulkImportInput')?.focus(),50);}
+}
+function closeBulkImport(){const m=document.getElementById('bulkImportModal');if(m)m.style.display='none';}
+function importBulkNumbers(){
+  const input=document.getElementById('bulkImportInput');
+  const text=(input?.value||'').trim(); if(!text){showToast('⚠️ Файл номерлерин киргизиңиз.');return;}
+  const nums=text.split(/[\\s,;]+/).map(x=>x.trim()).filter(Boolean);
+  const existing=getFiles();
+  const now=new Date().toLocaleString('ky-KG');
+  const imported=nums.map((number,i)=>({id:'manual-'+takrirYear+'-'+Date.now()+'-'+i+'-'+Math.random().toString(36).slice(2),number,name:'Катталуучу файл',date:now,createdTime:new Date().toISOString(),year:takrirYear,type:'pending',unread:true,manual:true,driveId:null,url:'',uploadProgress:0}));
+  saveFiles(existing.concat(imported)); renderChatList(); closeBulkImport(); showToast('✅ '+imported.length+' файл номери киргизилди.');
+}
 function showToast(message){
     const toast=document.getElementById("toast");toast.textContent=message;toast.style.display="block";clearTimeout(window.takrirToastTimer);window.takrirToastTimer=setTimeout(()=>toast.style.display="none",2800);
 }
@@ -2321,22 +2486,32 @@ document.getElementById("videoInput").addEventListener("change",function(){const
 
 /* Файл ачылганда плюс көрүнбөйт; тизмеде дайыма бир жерде турат. */
 const style=document.createElement("style");
-style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}.chat-item.unread{background:#f7fffb}.chat-item.unread .chat-name{font-weight:800}.chat-item.unread .chat-time{color:#00a884;font-weight:700}.unread-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px}`;
+style.textContent=`.person-avatar{background:linear-gradient(145deg,#d9fdd3,#b7e4ff 48%,#ffd6d6)!important;color:#1f2d35!important;font-weight:800;font-size:12px;display:flex!important;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(255,255,255,.75),0 2px 7px rgba(0,0,0,.10)}.person-avatar span{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.05;padding:4px;white-space:normal;overflow:hidden;word-break:break-all}.chat-more-btn{display:block;border:0;background:transparent;color:#667781;font-size:24px;width:34px;height:40px;line-height:30px;cursor:pointer}.chat-more-btn:focus{display:block}.chat-item.selected-row{background:linear-gradient(90deg,#d9fdd3,#c9f7ff,#ffe0e0)!important;outline:2px solid #25d366;outline-offset:-2px}.selection-bar{position:fixed;z-index:10000;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:24px;background:#202c33;color:#fff;box-shadow:0 4px 18px rgba(0,0,0,.25);font-size:13px}.selection-bar button{border:0;border-radius:18px;padding:8px 10px;background:#00a884;color:#fff;cursor:pointer}.selection-bar button:last-child{background:#4a5a63}.folder-row-open.folder-open-big{font-size:16px;padding:11px 18px;border-radius:22px;min-width:90px}.folder-row-open.folder-open-big:hover{transform:scale(1.02)}.file-open .floating-plus{display:flex!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .15s,transform .12s}.chat-item:hover{background:linear-gradient(90deg,#f4fff8,#eef8ff,#fff4f4)}.chat-item:active{transform:scale(.995)}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}.chat-item.unread{background:#f7fffb}.chat-item.unread .chat-name{font-weight:800}.chat-item.unread .chat-time{color:#00a884;font-weight:700}.unread-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px}.sidebar{background:linear-gradient(180deg,#ffffff 0%,#f5fbff 35%,#f5fff8 70%,#fff8f5 100%)}.chat-list{background:radial-gradient(circle at 15% 10%,rgba(0,168,132,.07),transparent 28%),radial-gradient(circle at 90% 28%,rgba(83,189,235,.07),transparent 26%),radial-gradient(circle at 20% 85%,rgba(255,120,120,.06),transparent 24%),radial-gradient(circle at 85% 90%,rgba(255,180,70,.06),transparent 24%)}.sidebar-header{background:linear-gradient(90deg,#eaf8f4,#eef8ff,#fff3ef)}.main-header{background:linear-gradient(90deg,#eaf8f4,#edf8ff,#fff3ef)}`;
 document.head.appendChild(style);
 
+const extraStyle=document.createElement("style");
+extraStyle.textContent=`@media (max-width:700px){.chat-more-btn{display:block}.selection-bar{left:8px;right:8px;transform:none;justify-content:center;flex-wrap:wrap}.selection-bar span{width:100%;text-align:center}.chat-item{user-select:none;-webkit-user-select:none}.folder-row-open.folder-open-big{font-size:17px;padding:12px 20px;min-width:100px}}`;
+document.head.appendChild(extraStyle);
+
+
 window.addEventListener("popstate", function(event){
-    closeModal("settingsModal");
-    closeModal("folderPickerModal");
-    closeModal("videoModal");
-    closeModal("numberModal");
+    const settings=document.getElementById("settingsModal");
     const shell=document.getElementById("appShell");
-    if(shell.classList.contains("file-open")){
+    if(settings && settings.style.display==="flex"){
+        settings.style.display="none";
+        const plus=document.getElementById("floatingPlus");
+        if(plus && !shell.classList.contains("file-open"))plus.style.display="flex";
         showWelcome();
         return;
     }
+    if(shell.classList.contains("file-open")){ showWelcome(); return; }
+    if(event.state?.takrirPage==="settings"){
+        settings.style.display="flex";
+        const plus=document.getElementById("floatingPlus"); if(plus)plus.style.display="flex";
+        updateUserUI(); loadProfileImage(); updateDriveFolderBox(); return;
+    }
     showWelcome();
 });
-
 
 document.addEventListener("DOMContentLoaded",async function(){
     if(!history.state || !history.state.takrirPage){
@@ -2356,5 +2531,49 @@ document.addEventListener("DOMContentLoaded",async function(){
 });
 </script>
 
+
+<style>
+.profile-name-row{display:flex;align-items:center;gap:8px}.profile-year{border:0;background:transparent;color:#00a884;font-weight:800;font-size:16px;cursor:pointer;padding:2px 5px;border-radius:8px}.profile-year:hover{background:#e8f8f3}.file-filters{overflow-x:auto;white-space:nowrap}.file-filters .filter-btn{flex:0 0 auto}.bulk-import{max-width:620px}
+</style>
+<style>
+.file-filters{display:flex;gap:8px;padding:4px 14px 10px;background:inherit}
+.filter-btn{border:0;background:#eef2f5;color:#54656f;border-radius:18px;padding:7px 15px;font-weight:600;cursor:pointer;font-size:13px}.filter-btn.active{background:#00a884;color:#fff}
+.year-menu{position:absolute;top:70px;left:14px;z-index:10001;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.18);padding:8px;min-width:150px}.year-menu button{display:block;width:100%;border:0;background:transparent;text-align:left;padding:10px 14px;border-radius:9px;cursor:pointer}.year-menu button:hover{background:#e9f8f2}.year-title{font-size:12px;color:#667781;padding:7px 14px 4px;font-weight:700}
+.profile-email{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+@media(max-width:700px){.file-filters{padding-left:10px}.year-menu{top:64px;left:8px}}
+</style>
+<script>
+let takrirYear=Number(localStorage.getItem('takrir_year')||2027);let fileFilter=localStorage.getItem('takrir_filter')||'all';
+function toggleYearMenu(){const m=document.getElementById('yearMenu');if(m)m.style.display=m.style.display==='none'?'block':'none'}
+function selectTakrirYear(y){takrirYear=Number(y);localStorage.setItem('takrir_year',String(y));const m=document.getElementById('yearMenu');if(m)m.style.display='none';const e=document.getElementById('userYear');if(e)e.textContent=String(y);fileFilter='all';localStorage.setItem('takrir_filter','all');renderChatList()}
+function setFileFilter(f){fileFilter=f;localStorage.setItem('takrir_filter',f);document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderChatList()}
+function getDisplayFiles(){
+ let files=getFiles();
+ files=files.filter(f=>Number(f.year||new Date(f.createdTime||Date.now()).getFullYear())===takrirYear);
+ if(fileFilter==='unread') files=files.filter(f=>!!f.unread);
+ if(fileFilter==='duplicates'){
+   const counts={}; files.forEach(f=>{const n=String(f.number||'').trim();counts[n]=(counts[n]||0)+1;});
+   files=files.filter(f=>counts[String(f.number||'').trim()]>1);
+ }
+ const q=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+ if(q)files=files.filter(f=>String(f.number||'').toLowerCase().includes(q));
+ return files;
+}
+const _renderChatList=window.renderChatList;
+window.renderChatList=function(){
+ const list=document.getElementById('chatList');if(!list)return;let files=getDisplayFiles();
+ if(!files.length){list.innerHTML='<div style="padding:28px;text-align:center;color:#667781">Файл номерлери азырынча жок</div>';return}
+ list.innerHTML=files.map(file=>{const selected=selectedFileIds.has(String(file.id));return `<div class="chat-item ${file.unread?'unread':''} ${selected?'selected-row':''}" data-file-id="${escapeAttr(file.id)}" onpointerdown="handleChatPointerDown(event,'${escapeAttr(file.id)}')" onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onpointercancel="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onclick="handleChatClick(event,'${escapeAttr(file.id)}')"><div class="chat-avatar person-avatar"><span>${escapeHTML(String(file.number||''))}</span></div><div class="chat-body"><div class="chat-top"><div class="chat-name">${escapeHTML(file.number)}${file.unread?'<span class="unread-badge">1</span>':''}</div><div class="chat-time">${escapeHTML(file.date||'')}</div></div><div class="chat-preview">${escapeHTML(file.name||'Видео')}</div></div><button class="chat-more-btn" onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button></div>`}).join('');
+ document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===fileFilter)); const y=document.getElementById('userYear'); if(y)y.textContent=String(takrirYear);
+};
+function handleChatClick(e,id){if(selectionMode)return;const f=getFiles().find(x=>String(x.id)===String(id));if(f)openFile(f)}
+// Add selected year to newly registered files before save.
+const _saveFiles=window.saveFiles;window.saveFiles=function(files){files=(files||[]).map(f=>({...f,year:Number(f.year||takrirYear)}));return _saveFiles(files)};
+// Keep the year visible as requested.
+function updateYearLabel(){const e=document.getElementById('userYear');if(e)e.textContent=String(takrirYear)}
+const _updateUserUI=window.updateUserUI;window.updateUserUI=function(){if(_updateUserUI)_updateUserUI();updateYearLabel()}
+document.addEventListener('click',e=>{const m=document.getElementById('yearMenu');if(m&&m.style.display!=='none'&&!e.target.closest('#yearMenu')&&!e.target.closest('#userEmail'))m.style.display='none'});
+setTimeout(()=>{updateYearLabel();document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===fileFilter))},50);
+</script>
 </body>
 </html>
