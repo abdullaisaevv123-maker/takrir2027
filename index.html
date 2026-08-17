@@ -640,9 +640,9 @@ button{
 ========================================================= */
 
 .floating-plus{
-    position:absolute;
-    right:25px;
-    bottom:22px;
+    position:fixed;
+    left:272px;
+    bottom:78px;
     width:58px;
     height:58px;
     border:0;
@@ -652,7 +652,10 @@ button{
     font-size:33px;
     line-height:1;
     box-shadow:0 4px 12px rgba(0,0,0,.28);
-    z-index:10;
+    z-index:7000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
 }
 
 .floating-plus:hover{
@@ -935,6 +938,8 @@ button{
     }
 }
 
+.mobile-back{display:none!important;}
+
 @media(max-width:560px){
 
     .sidebar-header{
@@ -966,10 +971,15 @@ button{
     }
 
     .floating-plus{
-        right:14px;
-        bottom:14px;
-        width:56px;
-        height:56px;
+        left:auto;
+        right:18px;
+        bottom:92px;
+        width:58px;
+        height:58px;
+    }
+
+    .mobile-back{
+        display:none!important;
     }
 
     .qr-section img{
@@ -1073,15 +1083,6 @@ button{
                 id="chatList"
                 class="chat-list"
             ></div>
-
-            <!-- WhatsApp сыяктуу плюс: файл номерлеринин оң төмөн жагында -->
-            <button
-                class="floating-plus"
-                title="Файл кошуу"
-                onclick="openNumberModal()"
-            >
-                ＋
-            </button>
 
         </aside>
 
@@ -1463,6 +1464,8 @@ button{
 
 </div>
 
+<!-- WhatsApp сыяктуу туруктуу +: файл ачылганда да көрүнөт -->
+<button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="openNumberModal()">＋</button>
 
 <!-- =======================================================
  TOAST
@@ -1757,7 +1760,22 @@ async function registerVideo(){
     if(!selectedVideoFile){showToast("Видео тандаңыз.");return;}
     const files=getFiles();
     const duplicate=files.find(x=>String(x.number)===String(selectedFileNumber));
-    if(duplicate && !confirm("Бул файл номери мурун катталган. Эски файлды ушул видео менен алмаштырасызбы?")) return;
+    if(duplicate){
+        showToast("⚠️ Бул файл номери буга чейин катталган. Башка номер киргизиңиз.");
+        return;
+    }
+    // Google Drive'дан да текшеребиз: башка телефон/компьютерде катталган номер кайра кайталанбайт.
+    try{
+        if(!driveAccessToken) await ensureDriveToken();
+        const remoteDuplicate=await findDriveFileByNumber(selectedFileNumber);
+        if(remoteDuplicate){
+            showToast("⚠️ Бул файл номери башка түзмөктө мурун катталган.");
+            await syncFilesFromDrive();
+            return;
+        }
+    }catch(e){
+        console.warn("Remote duplicate check failed",e);
+    }
 
     const button=document.getElementById("registerButton");
     button.disabled=true;
@@ -1805,6 +1823,16 @@ async function registerVideo(){
         document.getElementById("uploadStatus").textContent="❌ "+(error.message||"Жүктөөдө ката кетти.");
         button.disabled=false;
     }
+}
+
+async function findDriveFileByNumber(number){
+    const token=await ensureDriveToken();
+    const q="trashed=false and appProperties has { key='takrir' and value='1' }";
+    const url="https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+"&spaces=drive&pageSize=1000&fields=files(id,name,mimeType,size,webViewLink,webContentLink,createdTime,appProperties,parents)";
+    const r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+    if(!r.ok) throw new Error(await r.text());
+    const data=await r.json();
+    return (data.files||[]).find(f=>String(f.appProperties?.fileNumber||"")===String(number))||null;
 }
 
 async function uploadVideoToDrive(file,number,onProgress){
@@ -1907,6 +1935,11 @@ function openFile(file){
             <div class="info-block"><label class="info-label">📁 Файл номери</label><div class="info-value">${escapeHTML(file.number)}</div></div>\
             <div class="info-block"><label class="info-label">🔗 Ссылка</label><div class="link-box">${escapeHTML(shareUrl)}</div></div>\
             <div class="qr-section"><label class="info-label">📱 QR код</label><img src="${qrURL}" alt="QR код"></div>\
+            <div class="file-composer">\
+                <input id="fileNoteInput" type="text" placeholder="Жазуу..." maxlength="500" onkeydown="if(event.key==='Enter')sendFileNote('${escapeAttr(file.id)}')">\
+                <button type="button" onclick="sendFileNote('${escapeAttr(file.id)}')">➤</button>\
+            </div>\
+            <div id="fileNotes" class="file-notes"></div>\
             <div class="action-row">\
                 <button class="action-btn" onclick="shareLink('${escapeAttr(shareUrl)}')">↗️ Бөлүшүү</button>\
                 <button class="action-btn" onclick="copyText('${escapeAttr(shareUrl)}')">🔗 Ссылкасын копировать кылуу</button>\
@@ -1916,6 +1949,21 @@ function openFile(file){
         </div>`;
     renderChatList();
     document.getElementById("appShell").classList.add("chat-open");
+}
+
+function notesStorageKey(fileId){return "takrir_notes_"+(currentUser?.sub||currentUser?.email||"guest")+"_"+String(fileId);}
+function getFileNotes(fileId){try{return JSON.parse(localStorage.getItem(notesStorageKey(fileId))||"[]");}catch(e){return [];}}
+function renderFileNotes(fileId){
+    const box=document.getElementById("fileNotes"); if(!box)return;
+    const notes=getFileNotes(fileId);
+    box.innerHTML=notes.map(n=>`<div class="file-note"><span>${escapeHTML(n.text)}</span><small>${escapeHTML(n.time||"")}</small></div>`).join("");
+}
+function sendFileNote(fileId){
+    const input=document.getElementById("fileNoteInput"); if(!input)return;
+    const text=input.value.trim(); if(!text)return;
+    const notes=getFileNotes(fileId); notes.push({text,time:new Date().toLocaleString("ky-KG")});
+    localStorage.setItem(notesStorageKey(fileId),JSON.stringify(notes));
+    input.value=""; renderFileNotes(fileId);
 }
 
 function showWelcome(){
@@ -2094,10 +2142,16 @@ async function syncFilesFromDrive(){
         });
         if(!r.ok)throw new Error(await r.text());
         const data=await r.json();
-        const files=(data.files||[]).map(f=>({
-            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:"video",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",folder:getSelectedFolder()
+        const rawFiles=(data.files||[]).map(f=>({
+            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:"video",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",createdTime:f.createdTime||"",folder:getSelectedFolder()
         }));
-        if(files.length)saveFiles(files);
+        const byNumber=new Map();
+        rawFiles.sort((a,b)=>String(b.createdTime).localeCompare(String(a.createdTime))).forEach(f=>{
+            const key=String(f.number||"");
+            if(key && !byNumber.has(key)) byNumber.set(key,f);
+        });
+        const files=Array.from(byNumber.values()).map(({createdTime,...f})=>f);
+        saveFiles(files);
         renderChatList();
     }catch(e){console.warn("Drive файлдарын жаңыртуу мүмкүн болгон жок",e);}
 }
@@ -2122,7 +2176,7 @@ document.getElementById("videoInput").addEventListener("change",function(){const
 
 /* Башкы бетте гана плюс көрүнөт; файл ачылганда толугу менен жашырылат. */
 const style=document.createElement("style");
-style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}`;
+style.textContent=`.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}`;
 document.head.appendChild(style);
 
 window.addEventListener("popstate", function(event){
@@ -2145,6 +2199,10 @@ document.addEventListener("DOMContentLoaded",async function(){
     restoreGoogleUser();
     renderChatList();
     showWelcome();
+    // Ошол эле Google аккаунт менен башка телефон/компьютерден киргенде Drive'дагы номерлерди автоматтык жүктөйбүз.
+    if(currentUser){
+        ensureDriveToken().then(()=>syncFilesFromDrive()).catch(()=>{});
+    }
     /* Эски каттоо болсо, Google аккаунт киргенден кийин Drive'дан кайра жүктөйт. */
 });
 </script>
