@@ -321,6 +321,19 @@ button{
     font-size:24px;
 }
 
+.chat-name{
+    font-size:20px;
+    font-weight:700;
+    line-height:1.15;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.chat-time{
+    font-size:10px;
+    color:#667781;
+    white-space:nowrap;
+}
 .chat-content{
     min-width:0;
     flex:1;
@@ -348,9 +361,9 @@ button{
 }
 
 .chat-preview{
-    margin-top:5px;
+    margin-top:3px;
     color:#667781;
-    font-size:13px;
+    font-size:11px;
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
@@ -1472,7 +1485,7 @@ const GOOGLE_CLIENT_ID =
 /* Google Picker үчүн Browser API Key.
  * Бул ачкыч Google Cloud Console'до API/HTTP referrer боюнча чектелиши керек.
  */
-const GOOGLE_API_KEY = "AIzaSyBC4z-zmp18ZJ6VDlEecHvfX6ttjAmwdwE";
+const GOOGLE_API_KEY = "AIzaSyDys0wFaCaeu7iA6Q0fuFxop-Jiid4qWKI";
 
 /* Google Cloud project number / Picker App ID. */
 const GOOGLE_APP_ID = "1070875797774";
@@ -1859,8 +1872,16 @@ function openFileById(id){const f=getFiles().find(x=>String(x.id)===String(id));
 
 function openFile(file){
     if(!file)return;
+    const wasFileOpen = document.getElementById("appShell").classList.contains("file-open");
     currentFileId=file.id;
     sessionStorage.setItem("takrir_current_file",String(file.id));
+    // Башкы тизмеден файлга киргенде браузердин Back баскычы
+    // бир кадам менен кайра файл номерлеринин тизмесине алып келет.
+    if(!wasFileOpen){
+        history.pushState({takrirPage:"file",fileId:String(file.id)},"", "#file-"+encodeURIComponent(file.id));
+    }else{
+        history.replaceState({takrirPage:"file",fileId:String(file.id)},"", "#file-"+encodeURIComponent(file.id));
+    }
     savePageState("file");
     document.getElementById("mainTitle").textContent=file.number;
     document.getElementById("mainSubtitle").textContent="Файл номер: "+file.number;
@@ -1891,13 +1912,20 @@ function showWelcome(){
     currentFileId=null;
     sessionStorage.removeItem("takrir_current_file");
     savePageState("home");
-    document.getElementById("appShell").classList.remove("file-open");
+    document.getElementById("appShell").classList.remove("file-open","chat-open");
     document.getElementById("mainTitle").textContent="Такрир";
     document.getElementById("mainSubtitle").textContent="Файл номерлери";
     document.getElementById("messageArea").innerHTML=`<div class="welcome-box"><div class="welcome-icon">🎥</div><h2>Такрир</h2><p>Катталган файл номерлери ушул жерде чыгат.</p><p>Жаңы видео кошуу үчүн төмөнкү <b>＋</b> баскычын басыңыз.</p></div>`;
     renderChatList();
 }
-function closeMobileChat(){document.getElementById("appShell").classList.remove("chat-open","file-open");showWelcome();}
+function closeMobileChat(){
+    // Телефондогу ← баскычы да браузердин Back баскычы сыяктуу иштейт.
+    if(document.getElementById("appShell").classList.contains("file-open")){
+        history.back();
+    }else{
+        showWelcome();
+    }
+}
 
 function deleteFile(id){
     if(!confirm("Бул файл номерин сайттагы тизмеден өчүрөсүзбү? Google Drive'дагы видео сакталат."))return;
@@ -1940,32 +1968,47 @@ function updateDriveFolderBox(){
 }
 
 function selectDriveFolder(){
-    if(!currentUser){
-        alert("Адегенде ⋮ менюсунан Google аккаунт менен кириңиз.");
-        return;
-    }
+    closeMoreMenu();
 
-    if(GOOGLE_CLIENT_ID.startsWith("YOUR_") || GOOGLE_API_KEY.startsWith("YOUR_")){
-        alert("Google Drive папка тандоо үчүн Google Client ID жана API Key толтурулушу керек.");
-        return;
-    }
-
-    // Эгер аккаунт мурун тандалып, access token дагы жарактуу болсо,
-    // Google аккаунтун кайра тандатпай түз эле Picker ачабыз.
+    // Папка тандоо басылганда Google Picker түз ачылат.
+    // Эгер аккаунт/уруксат жок болсо, Google аккаунт тандоо терезеси
+    // бир жолу ачылып, уруксат берилгенден кийин Picker автоматтык ачылат.
     if(driveAccessToken){
         loadGooglePicker(driveAccessToken);
         return;
     }
 
+    window.takrirOpenPickerAfterLogin = true;
+
     loadGoogleIdentityServices(function(){
-        ensureDriveToken()
-            .then(token => loadGooglePicker(token))
-            .catch(e => {
-                console.error(e);
-                alert("Google Drive уруксатын алуу мүмкүн болгон жок. ⋮ → Google аккаунт менен кирүү аркылуу аккаунтту кайра тандап көрүңүз.");
+        if(!tokenClient){
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: DRIVE_SCOPE,
+                include_granted_scopes: true,
+                callback: async function(response){
+                    if(response && response.access_token){
+                        driveAccessToken = response.access_token;
+                        await loadGoogleUser();
+
+                        if(window.takrirOpenPickerAfterLogin){
+                            window.takrirOpenPickerAfterLogin = false;
+                            setTimeout(function(){
+                                loadGooglePicker(driveAccessToken);
+                            }, 150);
+                        }
+                    }else{
+                        window.takrirOpenPickerAfterLogin = false;
+                        showToast("Google аккаунт тандоо аяктаган жок.");
+                    }
+                }
             });
+        }
+
+        tokenClient.requestAccessToken({prompt:"select_account"});
     });
 }
+
 function loadGooglePicker(token){
     if(window.google?.picker){createPicker(token);return;}
     const old=document.getElementById("googlePickerScript");
@@ -2024,10 +2067,21 @@ document.getElementById("videoInput").addEventListener("change",function(){const
 
 /* Башкы бетте гана плюс көрүнөт; файл ачылганда толугу менен жашырылат. */
 const style=document.createElement("style");
-style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:18px;font-weight:600;padding:10px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}`;
+style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}`;
 document.head.appendChild(style);
 
+window.addEventListener("popstate", function(){
+    // Телефондун/браузердин физикалык Back баскычы.
+    // Файл ачылып турган болсо, бир кадам артка = файл номерлеринин тизмеси.
+    if(document.getElementById("appShell").classList.contains("file-open")){
+        showWelcome();
+    }
+});
+
 document.addEventListener("DOMContentLoaded",async function(){
+    if(!history.state || !history.state.takrirPage){
+        history.replaceState({takrirPage:"home"},"",window.location.pathname+window.location.search);
+    }
     restoreGoogleUser();
     renderChatList();
     showWelcome();
