@@ -968,12 +968,22 @@ button{
     .floating-plus{
         right:14px;
         bottom:14px;
+        width:56px;
+        height:56px;
     }
 
     .qr-section img{
         width:190px;
         height:190px;
     }
+}
+
+/* Google Picker settings терезесинин артында калбашы үчүн */
+.picker-dialog-bg,
+.picker-dialog,
+.goog-modalpopup,
+.goog-overlay {
+    z-index: 20000 !important;
 }
 </style>
 </head>
@@ -1064,6 +1074,15 @@ button{
                 class="chat-list"
             ></div>
 
+            <!-- WhatsApp сыяктуу плюс: файл номерлеринин оң төмөн жагында -->
+            <button
+                class="floating-plus"
+                title="Файл кошуу"
+                onclick="openNumberModal()"
+            >
+                ＋
+            </button>
+
         </aside>
 
 
@@ -1150,15 +1169,6 @@ button{
             </section>
 
 
-            <!-- FLOATING PLUS -->
-
-            <button
-                class="floating-plus"
-                title="Файл кошуу"
-                onclick="openNumberModal()"
-            >
-                ＋
-            </button>
 
         </main>
 
@@ -1970,14 +1980,27 @@ function updateDriveFolderBox(){
 function selectDriveFolder(){
     closeMoreMenu();
 
-    // Папка тандоо басылганда Google Picker түз ачылат.
-    // Эгер аккаунт/уруксат жок болсо, Google аккаунт тандоо терезеси
-    // бир жолу ачылып, уруксат берилгенден кийин Picker автоматтык ачылат.
+    // Picker settings модалдын артында көрүнбөй калбашы үчүн
+    // папка тандоо басылган замат настройка терезесин жабабыз.
+    closeModal("settingsModal");
+
+    if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){
+        showToast("❌ Google Client ID туура эмес.");
+        return;
+    }
+    if(!GOOGLE_API_KEY || GOOGLE_API_KEY.startsWith("YOUR_")){
+        showToast("❌ Google API Key туура эмес.");
+        return;
+    }
+
+    // Токен бар болсо — Google Picker дароо ачылат.
     if(driveAccessToken){
         loadGooglePicker(driveAccessToken);
         return;
     }
 
+    // Биринчи жолу GitHub Pages'тен киргенде Google уруксаты керек.
+    // Уруксат бүткөндөн кийин Picker автоматтык түрдө ачылат.
     window.takrirOpenPickerAfterLogin = true;
 
     loadGoogleIdentityServices(function(){
@@ -1989,13 +2012,10 @@ function selectDriveFolder(){
                 callback: async function(response){
                     if(response && response.access_token){
                         driveAccessToken = response.access_token;
-                        await loadGoogleUser();
-
+                        try{ await loadGoogleUser(); }catch(e){}
                         if(window.takrirOpenPickerAfterLogin){
                             window.takrirOpenPickerAfterLogin = false;
-                            setTimeout(function(){
-                                loadGooglePicker(driveAccessToken);
-                            }, 150);
+                            loadGooglePicker(driveAccessToken);
                         }
                     }else{
                         window.takrirOpenPickerAfterLogin = false;
@@ -2004,31 +2024,66 @@ function selectDriveFolder(){
                 }
             });
         }
-
         tokenClient.requestAccessToken({prompt:"select_account"});
     });
 }
 
 function loadGooglePicker(token){
+    if(!token){
+        showToast("❌ Google Drive уруксаты алынган жок.");
+        return;
+    }
     if(window.google?.picker){createPicker(token);return;}
     const old=document.getElementById("googlePickerScript");
-    if(old){const t=setInterval(()=>{if(window.google?.picker){clearInterval(t);createPicker(token);}},100);return;}
-    const script=document.createElement("script");script.id="googlePickerScript";script.src="https://apis.google.com/js/api.js";
-    script.onload=function(){gapi.load("picker",{callback:function(){createPicker(token);}});};
+    if(old){
+        const t=setInterval(()=>{
+            if(window.google?.picker){clearInterval(t);createPicker(token);}
+        },100);
+        setTimeout(()=>clearInterval(t),10000);
+        return;
+    }
+    const script=document.createElement("script");
+    script.id="googlePickerScript";
+    script.src="https://apis.google.com/js/api.js";
+    script.onload=function(){
+        gapi.load("picker",{callback:function(){createPicker(token);}});
+    };
     script.onerror=function(){
-        showToast("Google Picker жүктөлгөн жок. Google Picker API күйгүзүлгөнүн текшериңиз.");
+        showToast("❌ Google Picker жүктөлгөн жок. Google Picker API күйгүзүлгөнүн текшериңиз.");
     };
     document.head.appendChild(script);
 }
 function createPicker(accessToken){
-    const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS);
-    view.setIncludeFolders(true);view.setSelectFolderEnabled(true);
-    const picker=new google.picker.PickerBuilder().setDeveloperKey(GOOGLE_API_KEY).setAppId(GOOGLE_APP_ID).setOAuthToken(accessToken).setOrigin(window.location.protocol + "//" + window.location.host).addView(view).setCallback(function(data){
-        if(data.action===google.picker.Action.PICKED){
-            const d=data.docs[0];saveSelectedFolder({id:d.id,name:d.name});updateDriveFolderBox();showToast("✅ Google Drive папка тандалды.");
-        }
-    }).build();
-    picker.setVisible(true);
+    try{
+        // Settings модалын сөзсүз жабабыз — Picker өзүнчө үстүнкү терезе болуп ачылат.
+        closeModal("settingsModal");
+        const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS);
+        view.setIncludeFolders(true);
+        view.setSelectFolderEnabled(true);
+        const picker=new google.picker.PickerBuilder()
+            .setDeveloperKey(GOOGLE_API_KEY)
+            .setAppId(GOOGLE_APP_ID)
+            .setOAuthToken(accessToken)
+            .setOrigin(window.location.protocol + "//" + window.location.host)
+            .addView(view)
+            .setCallback(function(data){
+                if(data.action===google.picker.Action.PICKED){
+                    const d=data.docs && data.docs[0];
+                    if(d){
+                        saveSelectedFolder({id:d.id,name:d.name});
+                        updateDriveFolderBox();
+                        showToast("✅ Google Drive папка тандалды.");
+                    }
+                } else if(data.action===google.picker.Action.CANCEL){
+                    showToast("Папка тандоо жабылды.");
+                }
+            })
+            .build();
+        picker.setVisible(true);
+    }catch(e){
+        console.error("Google Picker error",e);
+        showToast("❌ Google Picker ачылган жок: "+(e.message||"ката"));
+    }
 }
 
 async function syncFilesFromDrive(){
@@ -2070,10 +2125,15 @@ const style=document.createElement("style");
 style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}`;
 document.head.appendChild(style);
 
-window.addEventListener("popstate", function(){
-    // Телефондун/браузердин физикалык Back баскычы.
-    // Файл ачылып турган болсо, бир кадам артка = файл номерлеринин тизмеси.
-    if(document.getElementById("appShell").classList.contains("file-open")){
+window.addEventListener("popstate", function(event){
+    // Телефондун/браузердин Back баскычы.
+    // Файл ачылып турган болсо, бир гана кадам артка = файл номерлеринин тизмеси.
+    const shell=document.getElementById("appShell");
+    if(shell.classList.contains("file-open")){
+        showWelcome();
+        return;
+    }
+    if(event.state?.takrirPage==="home"){
         showWelcome();
     }
 });
