@@ -635,20 +635,6 @@ button{
     background:#fecaca;
 }
 
-
-/* Pull-to-refresh өчүрүлдү: экранды кол менен ылдый тартканда браузер жаңыртпайт. */
-html, body{
-    overscroll-behavior-y:none !important;
-}
-body{
-    overscroll-behavior:none !important;
-}
-.settings-open .floating-plus,
-.folder-picker-open .floating-plus,
-.file-open .floating-plus{
-    display:none !important;
-}
-
 /* =========================================================
    FLOATING PLUS
 ========================================================= */
@@ -1079,6 +1065,8 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 }
 
 /* Google Picker settings терезесинин артында калбашы үчүн */
+.folder-picker-modal{max-height:92vh}.folder-row-select{border:0;background:#00a884;color:#fff;border-radius:7px;padding:7px 9px;font-size:12px}.folder-row-select:hover{background:#008f72}.drive-folder-row{display:flex;align-items:center;gap:8px}.drive-folder-name{flex:1;cursor:pointer}.folder-row-open{cursor:pointer;color:#667781;font-size:12px}
+
 .picker-dialog-bg,
 .picker-dialog,
 .goog-modalpopup,
@@ -1485,16 +1473,24 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
                 id="driveFolderBox"
                 class="folder-box"
             >
-                📁 Папка тандала элек.
+                Папка тандала элек.
             </div>
-            <div id="driveFolderLocation" class="settings-muted" style="margin-top:8px">Видео сакталуучу папка: тандала элек</div>
-            <button type="button" id="openDriveFolderBtn" class="settings-button" style="display:none;margin-top:8px" onclick="openSelectedFolderInDrive()">↗️ Google Drive'да папканы ачуу</button>
 
             <button
                 class="settings-button"
                 onclick="selectDriveFolder()"
             >
                 📂 Google Drive'дан папка тандоо
+            </button>
+
+            <button
+                type="button"
+                id="openSelectedFolderBtn"
+                class="settings-button"
+                style="background:#54656f"
+                onclick="openSelectedDriveFolder()"
+            >
+                ↗️ Google Drive папканы ачуу
             </button>
 
         </div>
@@ -1542,9 +1538,9 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
             <button
                 class="btn-cancel"
-                onclick="closeSettings()"
+                onclick="closeModal('settingsModal')"
             >
-                Сактоо
+                Жабуу
             </button>
 
         </div>
@@ -1577,7 +1573,7 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
     </div>
 </div>
 
-<!-- WhatsApp сыяктуу туруктуу +: файл номерлеринин тизмесинде гана көрүнөт -->
+<!-- WhatsApp сыяктуу туруктуу +: файл ачылганда да көрүнөт -->
 <button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="openNumberModal()">＋</button>
 
 <!-- =======================================================
@@ -1593,7 +1589,6 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
 
 
-
 <script>
 /* =========================================================
    ТАКРИР — GOOGLE DRIVE VIDEO REGISTRATION
@@ -1603,10 +1598,6 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 /* Бул жерге Google Cloud Console'догу Web OAuth Client ID'ни кой. */
 const GOOGLE_CLIENT_ID =
     "1070875797774-03j7qfohho2n7f2s2cvjbiqmasi55gue.apps.googleusercontent.com";
-
-// Google Drive Picker үчүн Browser API Key
-const GOOGLE_API_KEY = "AIzaSyDys0wFaCaeu7iA6Q0fuFxop-Jiid4qWKI";
-const GOOGLE_APP_ID = "1070875797774";
 
 /*
  * Google OAuth Client ID жогоруда коюлган.
@@ -1734,39 +1725,41 @@ function saveSelectedFolder(folder){localStorage.setItem(folderStorageKey(),JSON
 function ensureDriveToken(){
     return new Promise(function(resolve,reject){
         if(driveAccessToken){resolve(driveAccessToken);return;}
-        if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));return;}
+        if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){
+            reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));
+            return;
+        }
         loadGoogleIdentityServices(function(){
-            let consentRetried=false;
-            const finish=function(response){
-                if(response?.access_token){
-                    driveAccessToken=response.access_token;
-                    resolve(driveAccessToken);
-                    return;
+            try{
+                if(!tokenClient){
+                    tokenClient=google.accounts.oauth2.initTokenClient({
+                        client_id:GOOGLE_CLIENT_ID,
+                        scope:DRIVE_SCOPE,
+                        include_granted_scopes:true,
+                        callback:function(response){
+                            if(response?.access_token){
+                                driveAccessToken=response.access_token;
+                                localStorage.setItem("takrir_drive_scope_v2","1");
+                                resolve(driveAccessToken);
+                            }else{
+                                reject(new Error("Google Drive уруксаты алынган жок."));
+                            }
+                        }
+                    });
+                }else{
+                    tokenClient.callback=function(response){
+                        if(response?.access_token){
+                            driveAccessToken=response.access_token;
+                            localStorage.setItem("takrir_drive_scope_v2","1");
+                            resolve(driveAccessToken);
+                        }else reject(new Error("Google Drive уруксаты алынган жок."));
+                    };
                 }
-                // Жаңы Drive scope биринчи жолу берилсе, ошол эле аккаунт үчүн
-                // уруксатты сурайбыз. login_hint башка аккаунт тандоого жол бербейт.
-                if(!consentRetried && currentUser?.email && response?.error){
-                    consentRetried=true;
-                    tokenClient.requestAccessToken({prompt:"consent",login_hint:currentUser.email});
-                    return;
-                }
-                reject(new Error(response?.error_description || response?.error || "Google Drive уруксаты алынган жок."));
-            };
-            if(!tokenClient){
-                tokenClient=google.accounts.oauth2.initTokenClient({
-                    client_id:GOOGLE_CLIENT_ID,
-                    scope:DRIVE_SCOPE,
-                    include_granted_scopes:true,
-                    callback:finish
-                });
-            }else{
-                tokenClient.callback=finish;
-            }
-            // Мурун тандалган аккаунт гана колдонулат. login_hint башка аккаунт тандоочу терезени ачпайт.
-            tokenClient.requestAccessToken({
-                prompt: currentUser ? "none" : "select_account",
-                login_hint: currentUser?.email || undefined
-            });
+                // Биринчи жолу жаңы Drive scope үчүн уруксат сурайт.
+                // Ошол эле аккаунт колдонулат, башка аккаунт тандагыч ачылбайт.
+                const needConsent=!localStorage.getItem("takrir_drive_scope_v2");
+                tokenClient.requestAccessToken({prompt:needConsent?"consent":""});
+            }catch(e){reject(e);}
         });
     });
 }
@@ -1787,7 +1780,7 @@ function openNumberModal(){
     document.getElementById("numberModal").style.display="flex";
     setTimeout(()=>document.getElementById("fileNumberInput").focus(),100);
 }
-function closeModal(id){const el=document.getElementById(id);if(el)el.style.display="none";}
+function closeModal(id){const el=document.getElementById(id);if(el)el.style.display="none"; if(id==="settingsModal"){const plus=document.getElementById("floatingPlus"); if(plus && !document.getElementById("appShell")?.classList.contains("file-open")) plus.style.display="flex";}}
 function continueNumber(){
     const input=document.getElementById("fileNumberInput");
     let number=input.value.trim().replace(/\s+/g,"");
@@ -1820,43 +1813,45 @@ document.getElementById("videoInput").addEventListener("change",function(){
 async function registerVideo(){
     if(!selectedFileNumber){showToast("Файл номери жок.");return;}
     if(!selectedVideoFile){showToast("Видео тандаңыз.");return;}
+    const folder=getSelectedFolder();
+    if(!folder?.id){
+        showToast("⚠️ Алгач Настройкадан Google Drive папкасын тандаңыз.");
+        return;
+    }
     const files=getFiles();
     const duplicate=files.find(x=>String(x.number)===String(selectedFileNumber));
     if(duplicate){
         showToast("⚠️ Бул файл номери буга чейин катталган. Башка номер киргизиңиз.");
         return;
     }
-    // Google Drive'дан да текшеребиз: башка телефон/компьютерде катталган номер кайра кайталанбайт.
-    try{
-        if(!driveAccessToken) await ensureDriveToken();
-        const remoteDuplicate=await findDriveFileByNumber(selectedFileNumber);
-        if(remoteDuplicate){
-            showToast("⚠️ Бул файл номери башка түзмөктө мурун катталган.");
-            await syncFilesFromDrive();
-            return;
-        }
-    }catch(e){
-        console.warn("Remote duplicate check failed",e);
-    }
 
     const button=document.getElementById("registerButton");
     button.disabled=true;
     document.getElementById("uploadProgress").style.display="block";
     document.getElementById("uploadProgressBar").style.width="0%";
-    document.getElementById("uploadStatus").textContent="⏳ Google Drive'га жүктөлүп жатат...";
+    document.getElementById("uploadStatus").textContent="⏳ Катталып жатат...";
 
     try{
         if(!currentUser){
-            await new Promise((resolve,reject)=>{
-                const old=showToast;
-                alert("Адегенде ⋮ менюсунан Google аккаунт менен кириңиз.");
-                reject(new Error("Google login required"));
-            });
+            throw new Error("Google аккаунт тандалган эмес. Сайттын башында Google аккаунт менен кириңиз.");
         }
+        if(!driveAccessToken) await ensureDriveToken();
+
+        // Башка түзмөктө ушул номер катталган болсо, кайталабайбыз.
+        const remoteDuplicate=await findDriveFileByNumber(selectedFileNumber);
+        if(remoteDuplicate){
+            showToast("⚠️ Бул файл номери башка түзмөктө мурун катталган.");
+            await syncFilesFromDrive();
+            closeModal("videoModal");
+            button.disabled=false;
+            return;
+        }
+
         const data=await uploadVideoToDrive(selectedVideoFile,selectedFileNumber,function(percent){
             document.getElementById("uploadProgressBar").style.width=percent+"%";
-            document.getElementById("uploadStatus").textContent="⏳ Google Drive'га жүктөлүүдө: "+percent+"%";
+            document.getElementById("uploadStatus").textContent="⏳ Катталып жатат: "+percent+"%";
         });
+
         const item={
             id:data.id,
             number:selectedFileNumber,
@@ -1868,29 +1863,26 @@ async function registerVideo(){
             mimeType:selectedVideoFile.type||"video/mp4",
             size:selectedVideoFile.size,
             date:new Date().toLocaleString("ky-KG"),
-            folder:getSelectedFolder(),
+            folder:folder,
             unread:true
         };
         const newFiles=files.filter(x=>String(x.number)!==String(selectedFileNumber));
         newFiles.unshift(item);
         saveFiles(newFiles);
+
         closeModal("videoModal");
         selectedVideoFile=null;
         selectedFileNumber="";
         document.getElementById("videoInput").value="";
-        document.getElementById("selectedFileName").textContent="Файл тандала элек";
-        document.getElementById("uploadStatus").textContent="";
         document.getElementById("uploadProgress").style.display="none";
         document.getElementById("uploadProgressBar").style.width="0%";
-        document.getElementById("registerButton").disabled=true;
-        // Каттоо бүткөндө автоматтык түрдө файлды ачпайт, папка тандоого да кирбейт.
-        // Жөн гана тизмеге кайтып, жаңы номерди окулбаган билдирүүдөй көрсөтөт.
+        document.getElementById("uploadStatus").textContent="";
         renderChatList();
         showWelcome();
-        showToast("✅ Файл ийгиликтүү Google Drive'га сакталды");
+        showToast("✅ Файл номери жана видео ийгиликтүү катталды");
     }catch(error){
-        console.error(error);
-        document.getElementById("uploadStatus").textContent="❌ "+(error.message||"Жүктөөдө ката кетти.");
+        console.error("REGISTER ERROR:",error);
+        document.getElementById("uploadStatus").textContent="❌ "+(error.message||"Каттоодо ката кетти.");
         button.disabled=false;
     }
 }
@@ -1908,13 +1900,16 @@ async function findDriveFileByNumber(number){
 async function uploadVideoToDrive(file,number,onProgress){
     const token=await ensureDriveToken();
     const folder=getSelectedFolder();
+    if(!folder?.id) throw new Error("Google Drive папкасы тандалган эмес.");
+
     const metadata={
         name:file.name,
         mimeType:file.type||"video/mp4",
         appProperties:{takrir:"1",fileNumber:String(number)},
-        ...(folder?.id ? {parents:[folder.id]} : {})
+        parents:[folder.id]
     };
-    const init=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,webContentLink,createdTime",{
+
+    const init=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,webContentLink,createdTime,parents",{
         method:"POST",
         headers:{
             Authorization:"Bearer "+token,
@@ -1924,36 +1919,51 @@ async function uploadVideoToDrive(file,number,onProgress){
         },
         body:JSON.stringify(metadata)
     });
-    if(!init.ok) throw new Error("Drive upload башталган жок: "+await init.text());
+    if(!init.ok) throw new Error("Google Drive каттоону баштай алган жок: "+await init.text());
+
     const location=init.headers.get("Location");
-    if(!location) throw new Error("Google Drive upload URL алынган жок.");
+    if(!location) throw new Error("Google Drive upload дареги алынган жок.");
 
     const uploaded=await new Promise(function(resolve,reject){
         const xhr=new XMLHttpRequest();
         xhr.open("PUT",location,true);
         xhr.setRequestHeader("Content-Type",file.type||"video/mp4");
+        xhr.setRequestHeader("Content-Range","bytes 0-"+(file.size-1)+"/"+file.size);
         xhr.upload.onprogress=function(e){
-            if(e.lengthComputable && onProgress) onProgress(Math.min(99,Math.round(e.loaded/e.total*100)));
+            if(e.lengthComputable && onProgress){
+                onProgress(Math.min(99,Math.round((e.loaded/e.total)*100)));
+            }
         };
         xhr.onload=function(){
             if(xhr.status>=200 && xhr.status<300){
-                try{resolve(JSON.parse(xhr.responseText));}catch(e){reject(e);}
-            }else reject(new Error("Drive файл жүктөөдө ката: "+xhr.responseText));
+                try{resolve(JSON.parse(xhr.responseText));}
+                catch(e){reject(new Error("Google Drive жүктөлгөн файлдын жообу окулган жок."));}
+            }else{
+                reject(new Error("Google Drive файл жүктөөдө ката: "+(xhr.responseText||("HTTP "+xhr.status))));
+            }
         };
         xhr.onerror=function(){reject(new Error("Интернет же Google Drive байланышында ката кетти."));};
+        xhr.onabort=function(){reject(new Error("Жүктөө токтотулду."));};
         xhr.send(file);
     });
+
     if(onProgress) onProgress(100);
     const id=uploaded.id;
     let url=uploaded.webViewLink||("https://drive.google.com/file/d/"+id+"/view?usp=sharing");
+
+    // Видео ачылышы үчүн жалпы көрүү уруксатын аракет кылып беребиз.
     try{
-        await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"/permissions",{
+        const pr=await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"/permissions?sendNotificationEmail=false",{
             method:"POST",
             headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
             body:JSON.stringify({type:"anyone",role:"reader"})
         });
+        if(pr.ok){
+            url="https://drive.google.com/file/d/"+id+"/view?usp=sharing";
+        }
     }catch(e){console.warn("Public sharing permission берилген жок",e);}
-    return {...uploaded,id,url};
+
+    return {...uploaded,id,url,folder};
 }
 
 function renderChatList(){
@@ -1980,6 +1990,10 @@ function openFileById(id){const f=getFiles().find(x=>String(x.id)===String(id));
 
 function openFile(file){
     if(!file)return;
+    file.unread=false;
+    const all=getFiles();
+    const ix=all.findIndex(x=>String(x.id)===String(file.id));
+    if(ix>=0){all[ix]={...all[ix],unread:false};saveFiles(all);}
     if(file.unread){
         const all=getFiles();
         const target=all.find(x=>String(x.id)===String(file.id));
@@ -1998,7 +2012,7 @@ function openFile(file){
     savePageState("file");
     document.getElementById("mainTitle").textContent=file.number;
     document.getElementById("mainSubtitle").textContent="Файл номер: "+file.number;
-    document.getElementById("appShell").classList.add("file-open");
+    document.getElementById("appShell").classList.add("file-open"); const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="none";
     const videoUrl="https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/preview";
     const shareUrl=file.url||("https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/view?usp=sharing");
     const qrURL="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(shareUrl);
@@ -2040,7 +2054,7 @@ function showWelcome(){
     currentFileId=null;
     sessionStorage.removeItem("takrir_current_file");
     savePageState("home");
-    document.getElementById("appShell").classList.remove("file-open","chat-open");
+    document.getElementById("appShell").classList.remove("file-open","chat-open"); const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="flex";
     document.getElementById("mainTitle").textContent="Такрир";
     document.getElementById("mainSubtitle").textContent="Файл номерлери";
     document.getElementById("messageArea").innerHTML=`<div class="welcome-box"><div class="welcome-icon">🎥</div><h2>Такрир</h2><p>Катталган файл номерлери ушул жерде чыгат.</p><p>Жаңы видео кошуу үчүн төмөнкү <b>＋</b> баскычын басыңыз.</p></div>`;
@@ -2085,124 +2099,157 @@ function toggleMoreMenu(){
 function closeMoreMenu(){document.getElementById("moreMenu").style.display="none";}
 function openSettings(){
     closeMoreMenu();
+    const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="none";
     updateUserUI();
     updateDriveFolderBox();
-    const modal=document.getElementById("settingsModal");
-    document.getElementById("appShell")?.classList.add("settings-open");
-    modal.style.display="flex";
-    // Настройка өзүнчө history кадамы болсун: Back басылганда сайттан чыкпай,
-    // кайра файл номерлеринин негизги тизмесине келет.
-    if(history.state?.takrirPage!=="settings") {
-        history.pushState({takrirPage:"settings"},"",window.location.pathname+window.location.search+"#settings");
-    }
-}
-function closeSettings(){
-    const modal=document.getElementById("settingsModal");
-    if(modal) modal.style.display="none";
-    document.getElementById("appShell")?.classList.remove("settings-open");
-    // Настройкадан Сактоо басылганда сайттан чыкпайт — файл номерлеринин тизмеси ачылат.
-    history.replaceState({takrirPage:"home"},"",window.location.pathname+window.location.search);
-    showWelcome();
+    document.getElementById("settingsModal").style.display="flex";
 }
 function updateDriveFolderBox(){
     const box=document.getElementById("driveFolderBox");
-    const loc=document.getElementById("driveFolderLocation");
-    const openBtn=document.getElementById("openDriveFolderBtn");
     const folder=getSelectedFolder();
-    if(folder?.id){
-        box.innerHTML="📁 <b>Тандалган папка:</b> "+escapeHTML(folder.name);
-        if(loc) loc.textContent="Видео ушул папкага сакталат: "+folder.name;
-        if(openBtn){openBtn.style.display="block";openBtn.dataset.folderId=folder.id;}
-    }else{
-        box.textContent="📁 Папка тандала элек. Видео Google Drive'дын негизги папкасына сакталат.";
-        if(loc) loc.textContent="Видео сакталуучу папка: My Drive (негизги папка)";
-        if(openBtn) openBtn.style.display="none";
-    }
+    box.textContent=folder?"📁 Папка: "+folder.name+"\nID: "+folder.id:"📁 Папка тандала элек. Видео Google Drive'дын негизги папкасына сакталат.";
 }
-function openSelectedFolderInDrive(){
+
+function openSelectedDriveFolder(){
     const folder=getSelectedFolder();
-    if(folder?.id) window.open("https://drive.google.com/drive/folders/"+encodeURIComponent(folder.id),"_blank");
+    if(!folder?.id){showToast("⚠️ Адегенде папканы тандаңыз.");return;}
+    // Бул баскыч Google Drive'да ошол тандалган папканы ачат;
+    // тандалган папка ошол бойдон сакталат.
+    window.open("https://drive.google.com/drive/folders/"+encodeURIComponent(folder.id),"_blank","noopener");
 }
 
 async function selectDriveFolder(){
     closeMoreMenu();
+    closeModal("settingsModal");
     if(!currentUser){
-        showToast("🔐 Алгач Google аккаунт менен кириңиз.");
+        showToast("🔐 Алгач сайт ачылганда Google аккаунтту тандаңыз.");
         return;
     }
     try{
-        // Настройка ачылып турганда плюс тоскоол болбосун.
-        document.getElementById("settingsModal").style.display="none";
-        document.getElementById("appShell")?.classList.add("folder-picker-open");
-        const token=await ensureDriveToken();
-        await openGoogleDriveFolderPicker(token);
+        await ensureDriveToken();
+        openFolderPicker();
     }catch(e){
-        console.error("Drive Picker:",e);
-        document.getElementById("appShell")?.classList.remove("folder-picker-open");
-        showToast("❌ Google Drive папка тандоо ачылган жок: "+(e.message||"ката"));
+        console.error(e);
+        showToast("❌ Google Drive уруксаты алынган жок. Ошол эле аккаунт үчүн Drive уруксатын бериңиз.");
     }
 }
 
-function loadPickerApi(){
-    return new Promise((resolve,reject)=>{
-        if(window.google?.picker){resolve();return;}
-        const old=document.getElementById("googlePickerApiScript");
-        if(old){
-            const t=setInterval(()=>{
-                if(window.google?.picker){clearInterval(t);resolve();}
-            },100);
-            setTimeout(()=>{clearInterval(t);if(!window.google?.picker)reject(new Error("Google Picker API жүктөлгөн жок."));},10000);
-            return;
+/* API key талап кылган Google Picker колдонулбайт. Папкалар Drive Files API аркылуу түз көрсөтүлөт. */
+async function loadGooglePicker(token){
+    if(token) driveAccessToken=token;
+    await openFolderPicker();
+}
+
+window.takrirFolderPath=[];
+window.takrirFolderCache={};
+
+async function openFolderPicker(folderId=null,folderName="My Drive",pushPath=true){
+    if(!currentUser){showToast("🔐 Алгач Google аккаунтту тандаңыз.");return;}
+    try{
+        const token=await ensureDriveToken();
+        document.getElementById("folderPickerModal").style.display="flex";
+        document.getElementById("driveFolderSearch").value="";
+        if(pushPath){
+            if(folderId){
+                window.takrirFolderPath.push({id:folderId,name:folderName});
+            }else{
+                window.takrirFolderPath=[];
+            }
         }
-        const script=document.createElement("script");
-        script.id="googlePickerApiScript";
-        script.src="https://apis.google.com/js/api.js";
-        script.onload=()=>gapi.load("picker",{callback:resolve});
-        script.onerror=()=>reject(new Error("Google Picker API жүктөлгөн жок."));
-        document.head.appendChild(script);
+        window.takrirCurrentFolder={id:folderId,name:folderName};
+        updateFolderPickerHeader();
+        const list=document.getElementById("driveFolderList");
+        list.innerHTML='<div class="folder-loading">⏳ Google Drive папкалары жүктөлүүдө...</div>';
+        document.getElementById("chooseCurrentFolderBtn").disabled=!folderId;
+        document.getElementById("folderUpBtn").disabled=window.takrirFolderPath.length===0;
+
+        let q="mimeType='application/vnd.google-apps.folder' and trashed=false";
+        if(folderId){
+            q += " and '"+String(folderId).replace(/'/g,"\\'")+"' in parents";
+        }else{
+            q += " and 'root' in parents";
+        }
+        const url="https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+
+            "&spaces=drive&pageSize=1000&orderBy=name_natural&includeItemsFromAllDrives=true&supportsAllDrives=true&fields=files(id,name,parents,mimeType,driveId),nextPageToken";
+        const r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+        if(!r.ok){
+            const text=await r.text();
+            throw new Error("Drive папкаларын алуу мүмкүн болгон жок: "+text);
+        }
+        const data=await r.json();
+        window.takrirDriveFolders=data.files||[];
+        renderDriveFolderList(window.takrirDriveFolders);
+    }catch(e){
+        console.error(e);
+        document.getElementById("folderPickerModal").style.display="flex";
+        document.getElementById("driveFolderList").innerHTML=
+            '<div class="folder-error">❌ Google Drive папкалары ачылган жок.<br><small>'+escapeHTML(e.message||"")+'</small><br><br><span style="font-size:12px">Drive API жана OAuth уруксаты ушул Google аккаунт үчүн иштетилгенин текшериңиз.</span></div>';
+    }
+}
+
+function updateFolderPickerHeader(){
+    const path=document.getElementById("folderPickerPath");
+    const current=window.takrirCurrentFolder||{name:"My Drive"};
+    const parts=window.takrirFolderPath.map(x=>escapeHTML(x.name));
+    path.innerHTML="📍 My Drive"+(parts.length?" / "+parts.join(" / "):"");
+    document.getElementById("folderUpBtn").disabled=window.takrirFolderPath.length===0;
+    document.getElementById("chooseCurrentFolderBtn").disabled=!current.id;
+}
+
+function renderDriveFolderList(folders){
+    const list=document.getElementById("driveFolderList");
+    const selected=getSelectedFolder();
+    if(!folders.length){
+        list.innerHTML="<div class='folder-empty'>📁 Бул папканын ичинде башка папка жок.</div>";
+        return;
+    }
+    list.innerHTML=folders.map(f=>{
+        const isSelected=selected && String(selected.id)===String(f.id);
+        return `<div class="drive-folder-row ${isSelected?'selected':''}">
+            <span class="drive-folder-icon">📁</span>
+            <span class="drive-folder-name" onclick="openFolderPicker('${escapeAttr(f.id)}','${escapeAttr(f.name)}',true)">${escapeHTML(f.name)}</span>
+            <button type="button" class="folder-row-select" onclick="chooseFolderDirect('${escapeAttr(f.id)}','${escapeAttr(f.name)}')">${isSelected?'✓ Тандалды':'Тандоо'}</button>
+            <span class="folder-row-open" onclick="openFolderPicker('${escapeAttr(f.id)}','${escapeAttr(f.name)}',true)">Ачуу ›</span>
+        </div>`;
+    }).join('');
+}
+function chooseFolderDirect(id,name){
+    saveSelectedFolder({id:id,name:name});
+    updateDriveFolderBox();
+    renderDriveFolderList(window.takrirDriveFolders||[]);
+    showToast("✅ «"+name+"» папкасы тандалды. Видеолор ушул папкага сакталат.");
+}
+
+function filterDriveFolders(){
+    const q=(document.getElementById("driveFolderSearch").value||"").trim().toLowerCase();
+    const folders=window.takrirDriveFolders||[];
+    renderDriveFolderList(folders.filter(f=>String(f.name||"").toLowerCase().includes(q)));
+}
+
+function chooseCurrentFolder(){
+    const folder=window.takrirCurrentFolder;
+    if(!folder?.id)return;
+    saveSelectedFolder({id:folder.id,name:folder.name});
+    updateDriveFolderBox();
+    closeFolderPicker();
+    showToast("✅ «"+folder.name+"» папка тандалды");
+}
+
+function folderPickerUp(){
+    const path=window.takrirFolderPath||[];
+    if(!path.length)return;
+    path.pop();
+    const parent=path.length?path[path.length-1]:null;
+    const parentId=parent?parent.id:null;
+    const parentName=parent?parent.name:"My Drive";
+    openFolderPicker(parentId,parentName,false).then(()=>{
+        window.takrirFolderPath=path;
+        updateFolderPickerHeader();
     });
 }
 
-async function openGoogleDriveFolderPicker(token){
-    await loadPickerApi();
-    if(!window.google?.picker) throw new Error("Google Picker жеткиликтүү эмес.");
-    const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS);
-    view.setIncludeFolders(true);
-    view.setSelectFolderEnabled(true);
-    const builder=new google.picker.PickerBuilder()
-        .setDeveloperKey(GOOGLE_API_KEY)
-        .setAppId(GOOGLE_APP_ID)
-        .setOAuthToken(token)
-        .setOrigin(window.location.protocol+"//"+window.location.host)
-        .addView(view)
-        .setCallback(function(data){
-            if(data.action===google.picker.Action.PICKED){
-                const d=data.docs?.[0];
-                if(d){
-                    saveSelectedFolder({id:d.id,name:d.name});
-                    updateDriveFolderBox();
-                    closeFolderPicker();
-                    showToast("✅ Тандалган папка: "+d.name);
-                }
-            }else if(data.action===google.picker.Action.CANCEL){
-                closeFolderPicker();
-            }
-        });
-    const picker=builder.build();
-    picker.setVisible(true);
-}
-
-// Эски API-keyсиз ички папка модалы эми колдонулбайт, бирок функциялар калган версиялар менен шайкеш болсун.
-async function loadGooglePicker(token){
-    if(token) driveAccessToken=token;
-    await openGoogleDriveFolderPicker(driveAccessToken);
-}
-
 function closeFolderPicker(){
-    document.getElementById("appShell")?.classList.remove("folder-picker-open");
-    const modal=document.getElementById("folderPickerModal");
-    if(modal) modal.style.display="none";
-    updateDriveFolderBox();
+    closeModal('folderPickerModal');
 }
 
 async function syncFilesFromDrive(){
@@ -2241,6 +2288,7 @@ async function refreshFiles(){
     }catch(e){
         renderChatList();
         showToast("⚠️ Жаңыртуу бүттү, бирок Google Drive жеткиликтүү эмес");
+    }finally{
     }
 }
 
@@ -2268,27 +2316,27 @@ function escapeAttr(text){return String(text??"").replace(/\\/g,"\\\\").replace(
 document.getElementById("fileNumberInput").addEventListener("keydown",function(e){if(e.key==="Enter")continueNumber();});
 document.querySelectorAll(".modal-overlay").forEach(modal=>modal.addEventListener("click",function(e){if(e.target===modal)modal.style.display="none";}));
 document.addEventListener("click",function(event){const menu=document.getElementById("moreMenu");if(menu.style.display!=="block")return;if(!event.target.closest(".more-menu")&&!event.target.closest(".circle-btn"))closeMoreMenu();});
-document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeMoreMenu();document.querySelectorAll(".modal-overlay").forEach(m=>m.style.display="none");document.getElementById("appShell")?.classList.remove("settings-open","folder-picker-open");}});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeMoreMenu();document.querySelectorAll(".modal-overlay").forEach(m=>m.style.display="none");}});
 document.getElementById("videoInput").addEventListener("change",function(){const f=this.files?.[0];if(f&&f.size>1024*1024*1024){alert("Видео 1 GB'дан кичине болсун.");this.value="";selectedVideoFile=null;document.getElementById("registerButton").disabled=true;}});
 
 /* Файл ачылганда плюс көрүнбөйт; тизмеде дайыма бир жерде турат. */
 const style=document.createElement("style");
-style.textContent=`.file-open .floating-plus{display:none!important}.settings-open .floating-plus,.folder-picker-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}.chat-item.unread{background:#f7fffb}.chat-item.unread .chat-name{font-weight:800}.chat-item.unread .chat-time{color:#00a884;font-weight:700}.unread-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px}`;
+style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}.chat-item.unread{background:#f7fffb}.chat-item.unread .chat-name{font-weight:800}.chat-item.unread .chat-time{color:#00a884;font-weight:700}.unread-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px}`;
 document.head.appendChild(style);
 
 window.addEventListener("popstate", function(event){
+    closeModal("settingsModal");
+    closeModal("folderPickerModal");
+    closeModal("videoModal");
+    closeModal("numberModal");
     const shell=document.getElementById("appShell");
-    const settings=document.getElementById("settingsModal");
-    const folderPicker=document.getElementById("folderPickerModal");
-    if(settings) settings.style.display="none";
-    if(folderPicker) folderPicker.style.display="none";
-    // Back: настройкадан чыкса — сайттан чыкпай, файл номерлеринин тизмеси.
     if(shell.classList.contains("file-open")){
         showWelcome();
         return;
     }
     showWelcome();
 });
+
 
 document.addEventListener("DOMContentLoaded",async function(){
     if(!history.state || !history.state.takrirPage){
