@@ -1,0 +1,2039 @@
+<!--
+GOOGLE OAUTH:
+Client ID already configured.
+For local Live Server, add http://127.0.0.1:5500 and/or http://localhost:5500
+to Google Cloud Console -> APIs & Services -> Credentials ->
+this OAuth 2.0 Web client -> Authorized JavaScript origins.
+
+When publishing through GitHub Pages, add the exact GitHub Pages origin,
+for example https://USERNAME.github.io, to Authorized JavaScript origins.
+Do NOT put a Client Secret in this HTML.
+-->
+
+<!-- Google account login removed intentionally.
+     The site opens directly without a Google-account login screen. -->
+<!DOCTYPE html>
+<html lang="ky">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Такрир — WhatsApp Style</title>
+
+<!--
+===========================================================
+ ТАКРИР — WHATSAPP STYLE
+ Негизги функциялар:
+ 1. Google аккаунт менен кирүү
+ 2. WhatsApp сыяктуу сол жактагы файл номерлеринин тизмеси
+ 3. + баскычы → файл номери → Улантуу → видео → Каттоо
+ 4. Google Drive'ге видео жүктөө
+ 5. Файл номерин басканда видео + ссылка + QR
+ 6. Ссылка көчүрүү / QR көчүрүү / Бөлүшүү
+ 7. Үч чекит → Настройка
+ 8. Google Drive папкасын тандоо
+ 9. Тандалган папканы настройкада көрсөтүү
+ 10. Баракты F5 кылганда ошол эле бетте калуу
+ 11. localStorage аркылуу браузерде катталган файлдарды сактоо
+
+ ЭСКЕРТҮҮ:
+ Google аккаунт менен кирүү үчүн Web OAuth Client ID орнотулду.
+===========================================================
+-->
+
+<style>
+*{box-sizing:border-box}
+
+html,body{
+    width:100%;
+    height:100%;
+    margin:0;
+    padding:0;
+}
+
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    background:#d1d7db;
+    color:#111827;
+    overflow:hidden;
+}
+
+button,input{
+    font-family:inherit;
+}
+
+button{
+    cursor:pointer;
+}
+
+:root{
+    --wa-green:#00a884;
+    --wa-green-dark:#008f72;
+    --wa-light:#f0f2f5;
+    --wa-bg:#efeae2;
+    --wa-border:#d8dde1;
+    --wa-muted:#667781;
+    --wa-blue:#53bdeb;
+    --danger:#dc3545;
+    --white:#ffffff;
+}
+
+/* =========================================================
+   LOGIN
+========================================================= */
+
+#loginScreen{
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+        linear-gradient(135deg,#0b141a,#182229);
+}
+
+.login-wrapper{
+    width:min(430px,92vw);
+    background:#fff;
+    border-radius:18px;
+    padding:35px 30px;
+    box-shadow:0 20px 70px rgba(0,0,0,.35);
+    text-align:center;
+}
+
+.login-logo{
+    width:86px;
+    height:86px;
+    margin:0 auto 18px;
+    border-radius:50%;
+    background:var(--wa-green);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:48px;
+}
+
+.login-wrapper h1{
+    margin:0;
+    font-size:27px;
+}
+
+.login-wrapper p{
+    color:var(--wa-muted);
+    line-height:1.55;
+}
+
+.google-login-btn{
+    width:100%;
+    border:1px solid #dadce0;
+    background:#fff;
+    color:#202124;
+    padding:14px 18px;
+    border-radius:9px;
+    font-size:16px;
+    font-weight:bold;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    transition:.2s;
+}
+
+.google-login-btn:hover{
+    background:#f8f9fa;
+    box-shadow:0 2px 7px rgba(0,0,0,.12);
+}
+
+.google-icon{
+    width:22px;
+    height:22px;
+    font-weight:bold;
+    color:#4285f4;
+}
+
+.login-note{
+    margin-top:18px;
+    font-size:12px;
+}
+
+/* =========================================================
+   APP
+========================================================= */
+
+#app{
+    display:none;
+    width:100%;
+    height:100vh;
+}
+
+.app-shell{
+    width:100%;
+    height:100%;
+    display:flex;
+    background:#fff;
+}
+
+/* =========================================================
+   SIDEBAR
+========================================================= */
+
+.sidebar{
+    width:350px;
+    min-width:280px;
+    height:100%;
+    background:#fff;
+    border-right:1px solid #d9d9d9;
+    display:flex;
+    flex-direction:column;
+}
+
+.sidebar-header{
+    height:65px;
+    min-height:65px;
+    background:var(--wa-light);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:8px 14px;
+}
+
+.profile{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:0;
+}
+
+.profile-avatar{
+    width:43px;
+    height:43px;
+    min-width:43px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#dfe5e7;
+}
+
+.profile-info{
+    min-width:0;
+}
+
+.profile-name{
+    font-weight:bold;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.profile-email{
+    color:var(--wa-muted);
+    font-size:11px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:190px;
+}
+
+.header-actions{
+    display:flex;
+    align-items:center;
+    gap:3px;
+}
+
+.circle-btn{
+    width:40px;
+    height:40px;
+    border:0;
+    border-radius:50%;
+    background:transparent;
+    font-size:22px;
+    color:#54656f;
+}
+
+.circle-btn:hover{
+    background:#e2e5e7;
+}
+
+.search-area{
+    padding:8px 12px;
+    background:#fff;
+    border-bottom:1px solid #eee;
+}
+
+.search-box{
+    width:100%;
+    height:42px;
+    border:0;
+    outline:none;
+    border-radius:8px;
+    background:#f0f2f5;
+    padding:0 15px;
+    font-size:14px;
+}
+
+.chat-list{
+    flex:1;
+    overflow-y:auto;
+    overflow-x:hidden;
+}
+
+.chat-list::-webkit-scrollbar,
+.message-area::-webkit-scrollbar{
+    width:7px;
+}
+
+.chat-list::-webkit-scrollbar-thumb,
+.message-area::-webkit-scrollbar-thumb{
+    background:#c8cdd0;
+    border-radius:20px;
+}
+
+.chat-item{
+    height:78px;
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:8px 14px;
+    border:0;
+    border-bottom:1px solid #f0f0f0;
+    background:#fff;
+    text-align:left;
+}
+
+.chat-item:hover{
+    background:#f5f6f6;
+}
+
+.chat-item.active{
+    background:#f0f2f5;
+}
+
+.chat-avatar{
+    width:50px;
+    height:50px;
+    min-width:50px;
+    border-radius:50%;
+    background:#dfe5e7;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;
+}
+
+.chat-content{
+    min-width:0;
+    flex:1;
+}
+
+.chat-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+}
+
+.chat-number{
+    font-size:16px;
+    font-weight:bold;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.chat-date{
+    font-size:11px;
+    color:#667781;
+    white-space:nowrap;
+}
+
+.chat-preview{
+    margin-top:5px;
+    color:#667781;
+    font-size:13px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.empty-list{
+    padding:55px 20px;
+    text-align:center;
+    color:#667781;
+    line-height:1.7;
+}
+
+.sidebar-footer{
+    padding:9px 12px;
+    background:#f0f2f5;
+    border-top:1px solid #ddd;
+}
+
+.new-file-side-btn{
+    width:100%;
+    border:0;
+    background:var(--wa-green);
+    color:#fff;
+    border-radius:9px;
+    padding:12px;
+    font-weight:bold;
+}
+
+.new-file-side-btn:hover{
+    background:var(--wa-green-dark);
+}
+
+/* =========================================================
+   MAIN CHAT
+========================================================= */
+
+.main{
+    flex:1;
+    min-width:0;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    background:var(--wa-bg);
+    position:relative;
+}
+
+.main-header{
+    height:65px;
+    min-height:65px;
+    background:var(--wa-light);
+    border-bottom:1px solid #d8d8d8;
+    display:flex;
+    align-items:center;
+    padding:8px 18px;
+    gap:12px;
+}
+
+.main-header-avatar{
+    width:43px;
+    height:43px;
+    border-radius:50%;
+    background:#dfe5e7;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+}
+
+.main-title-wrap{
+    min-width:0;
+    flex:1;
+}
+
+.main-title{
+    font-weight:bold;
+    font-size:16px;
+}
+
+.main-subtitle{
+    color:#667781;
+    font-size:12px;
+    margin-top:3px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.message-area{
+    flex:1;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding:28px;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+    position:relative;
+}
+
+.message-area::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    opacity:.16;
+    pointer-events:none;
+    background-image:
+        radial-gradient(#8d8d8d 0.7px,transparent .7px);
+    background-size:14px 14px;
+}
+
+.welcome-box{
+    position:relative;
+    z-index:1;
+    width:min(650px,100%);
+    margin:auto;
+    text-align:center;
+    background:#f8f9fa;
+    border-radius:15px;
+    padding:40px 30px;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+    color:#667781;
+}
+
+.welcome-icon{
+    font-size:60px;
+}
+
+.welcome-box h2{
+    color:#374151;
+    margin:12px 0;
+}
+
+.welcome-box p{
+    line-height:1.6;
+}
+
+/* =========================================================
+   FILE CARD
+========================================================= */
+
+.file-card{
+    position:relative;
+    z-index:1;
+    width:min(720px,100%);
+    background:#fff;
+    border-radius:10px;
+    padding:16px;
+    box-shadow:0 1px 2px rgba(0,0,0,.15);
+    margin:0 auto 25px;
+}
+
+.file-card-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:12px;
+}
+
+.file-card-number{
+    font-size:20px;
+    font-weight:bold;
+}
+
+.file-card-date{
+    color:#667781;
+    font-size:11px;
+}
+
+.video-container{
+    width:100%;
+    background:#101010;
+    border-radius:9px;
+    overflow:hidden;
+}
+
+.video-container video{
+    width:100%;
+    max-height:65vh;
+    display:block;
+    background:#000;
+}
+
+.info-section{
+    margin-top:18px;
+}
+
+.info-label{
+    display:block;
+    font-size:13px;
+    color:#667781;
+    margin-bottom:7px;
+}
+
+.copy-row{
+    width:100%;
+    display:flex;
+    gap:7px;
+}
+
+.copy-row input{
+    flex:1;
+    min-width:0;
+    border:1px solid #d1d5db;
+    border-radius:8px;
+    background:#f8f9fa;
+    padding:11px 12px;
+    outline:none;
+}
+
+.copy-btn{
+    border:0;
+    background:#54656f;
+    color:#fff;
+    padding:0 15px;
+    border-radius:8px;
+    white-space:nowrap;
+}
+
+.copy-btn:hover{
+    background:#37474f;
+}
+
+.qr-section{
+    text-align:center;
+    margin-top:18px;
+    border-top:1px solid #eee;
+    padding-top:17px;
+}
+
+.qr-section img{
+    width:220px;
+    height:220px;
+    border:1px solid #ddd;
+    background:#fff;
+}
+
+.action-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-top:18px;
+}
+
+.action-btn{
+    border:1px solid #d4d7da;
+    background:#fff;
+    border-radius:8px;
+    padding:11px 8px;
+    font-size:13px;
+}
+
+.action-btn:hover{
+    background:#f0f2f5;
+}
+
+.delete-row{
+    margin-top:14px;
+    text-align:right;
+}
+
+.delete-btn{
+    border:0;
+    background:#fee2e2;
+    color:#b91c1c;
+    border-radius:8px;
+    padding:9px 13px;
+}
+
+.delete-btn:hover{
+    background:#fecaca;
+}
+
+/* =========================================================
+   FLOATING PLUS
+========================================================= */
+
+.floating-plus{
+    position:absolute;
+    right:25px;
+    bottom:22px;
+    width:58px;
+    height:58px;
+    border:0;
+    border-radius:50%;
+    background:var(--wa-green);
+    color:#fff;
+    font-size:33px;
+    line-height:1;
+    box-shadow:0 4px 12px rgba(0,0,0,.28);
+    z-index:10;
+}
+
+.floating-plus:hover{
+    background:var(--wa-green-dark);
+    transform:scale(1.03);
+}
+
+/* =========================================================
+   THREE DOT MENU
+========================================================= */
+
+.more-menu{
+    position:fixed;
+    display:none;
+    top:67px;
+    right:20px;
+    z-index:5000;
+    width:210px;
+    background:#fff;
+    border-radius:9px;
+    overflow:hidden;
+    box-shadow:0 5px 22px rgba(0,0,0,.25);
+}
+
+.more-menu button{
+    display:block;
+    width:100%;
+    border:0;
+    background:#fff;
+    padding:14px 17px;
+    text-align:left;
+    font-size:14px;
+}
+
+.more-menu button:hover{
+    background:#f0f2f5;
+}
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.modal-overlay{
+    position:fixed;
+    inset:0;
+    z-index:8000;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:15px;
+    background:rgba(0,0,0,.62);
+}
+
+.modal{
+    width:min(480px,96vw);
+    max-height:90vh;
+    overflow:auto;
+    background:#fff;
+    border-radius:15px;
+    padding:25px;
+    box-shadow:0 18px 60px rgba(0,0,0,.35);
+}
+
+.modal.large{
+    width:min(680px,96vw);
+}
+
+.modal h2{
+    margin:0 0 8px;
+}
+
+.modal p{
+    color:#667781;
+}
+
+.modal input[type=text],
+.modal input[type=password],
+.modal input[type=email]{
+    width:100%;
+    padding:13px;
+    border:1px solid #d1d5db;
+    border-radius:9px;
+    outline:none;
+}
+
+.modal input:focus{
+    border-color:var(--wa-green);
+}
+
+.modal-actions{
+    display:flex;
+    gap:10px;
+    margin-top:18px;
+}
+
+.modal-actions button{
+    flex:1;
+    border:0;
+    border-radius:9px;
+    padding:12px;
+}
+
+.btn-cancel{
+    background:#e5e7eb;
+    color:#111827;
+}
+
+.btn-green{
+    background:var(--wa-green);
+    color:#fff;
+}
+
+.btn-green:hover{
+    background:var(--wa-green-dark);
+}
+
+.file-picker-label{
+    display:block;
+    border:2px dashed #b9c4c7;
+    background:#f7f9f9;
+    padding:24px 15px;
+    border-radius:10px;
+    text-align:center;
+    margin-top:14px;
+    cursor:pointer;
+}
+
+.file-picker-label:hover{
+    background:#eef3f3;
+}
+
+.file-picker-label input{
+    display:none;
+}
+
+.selected-file{
+    color:#667781;
+    font-size:13px;
+    margin-top:9px;
+    word-break:break-word;
+}
+
+.upload-progress{
+    width:100%;
+    height:9px;
+    margin-top:16px;
+    border-radius:20px;
+    background:#e5e7eb;
+    display:none;
+    overflow:hidden;
+}
+
+.upload-progress-bar{
+    height:100%;
+    width:0;
+    background:var(--wa-green);
+    transition:width .1s linear;
+}
+
+.upload-status{
+    margin-top:12px;
+    font-size:13px;
+    font-weight:bold;
+}
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+.settings-item{
+    border:1px solid #e5e7eb;
+    border-radius:11px;
+    padding:17px;
+    margin-top:13px;
+}
+
+.settings-item h3{
+    margin:0 0 7px;
+}
+
+.settings-muted{
+    color:#667781;
+    font-size:13px;
+    line-height:1.5;
+}
+
+.folder-box{
+    background:#f0f2f5;
+    border-radius:9px;
+    padding:13px;
+    margin-top:10px;
+    white-space:pre-wrap;
+    word-break:break-word;
+}
+
+.settings-button{
+    margin-top:11px;
+    border:0;
+    background:var(--wa-green);
+    color:#fff;
+    padding:11px 15px;
+    border-radius:8px;
+}
+
+.settings-button:hover{
+    background:var(--wa-green-dark);
+}
+
+.account-settings{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.account-settings img{
+    width:45px;
+    height:45px;
+    border-radius:50%;
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+.toast{
+    position:fixed;
+    left:50%;
+    bottom:28px;
+    z-index:10000;
+    transform:translateX(-50%);
+    background:#111827;
+    color:#fff;
+    padding:12px 18px;
+    border-radius:8px;
+    display:none;
+    max-width:90vw;
+    text-align:center;
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media(max-width:800px){
+
+    .sidebar{
+        width:100%;
+        min-width:0;
+        max-width:100%;
+    }
+
+    .main{
+        display:none;
+    }
+
+    .sidebar.mobile-open-chat + .main{
+        display:flex;
+    }
+
+    .app-shell.chat-open .sidebar{
+        display:none;
+    }
+
+    .app-shell.chat-open .main{
+        display:flex;
+    }
+
+    .mobile-back{
+        display:block!important;
+    }
+
+    .profile-email{
+        max-width:120px;
+    }
+}
+
+@media(min-width:801px){
+    .mobile-back{
+        display:none!important;
+    }
+}
+
+@media(max-width:560px){
+
+    .sidebar-header{
+        padding:8px 9px;
+    }
+
+    .search-area{
+        padding:7px 8px;
+    }
+
+    .message-area{
+        padding:12px;
+    }
+
+    .file-card{
+        padding:10px;
+    }
+
+    .action-row{
+        grid-template-columns:1fr;
+    }
+
+    .copy-row{
+        flex-direction:column;
+    }
+
+    .copy-btn{
+        padding:11px;
+    }
+
+    .floating-plus{
+        right:14px;
+        bottom:14px;
+    }
+
+    .qr-section img{
+        width:190px;
+        height:190px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- =======================================================
+ MAIN APPLICATION
+======================================================= -->
+
+<div id="app" style="display:block">
+
+    <div class="app-shell" id="appShell">
+
+
+        <!-- =================================================
+             LEFT SIDEBAR
+        ================================================== -->
+
+        <aside class="sidebar">
+
+            <div class="sidebar-header">
+
+                <div class="profile">
+
+                    <img
+                        id="userAvatar"
+                        class="profile-avatar"
+                        src=""
+                        alt="avatar"
+                    >
+
+                    <div class="profile-info">
+
+                        <div
+                            id="userName"
+                            class="profile-name"
+                        >
+                            Аккаунт
+                        </div>
+
+                        <div
+                            id="userEmail"
+                            class="profile-email"
+                        >
+                            -
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="header-actions">
+
+                    <button
+                        class="circle-btn"
+                        title="Меню"
+                        onclick="toggleMoreMenu()"
+                    >
+                        ⋮
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- SEARCH -->
+
+            <div class="search-area">
+
+                <input
+                    id="searchInput"
+                    class="search-box"
+                    type="text"
+                    placeholder="🔎 Файл номерин издөө..."
+                    oninput="renderChatList()"
+                >
+
+            </div>
+
+
+            <!-- CHAT / FILE LIST -->
+
+            <div
+                id="chatList"
+                class="chat-list"
+            ></div>
+
+        </aside>
+
+
+        <!-- =================================================
+             MAIN CHAT AREA
+        ================================================== -->
+
+        <main class="main">
+
+            <header
+                id="mainHeader"
+                class="main-header"
+            >
+
+                <button
+                    class="circle-btn mobile-back"
+                    onclick="closeMobileChat()"
+                    style="display:none"
+                >
+                    ←
+                </button>
+
+                <div
+                    id="mainHeaderAvatar"
+                    class="main-header-avatar"
+                >
+                    🎥
+                </div>
+
+                <div class="main-title-wrap">
+
+                    <div
+                        id="mainTitle"
+                        class="main-title"
+                    >
+                        Такрир
+                    </div>
+
+                    <div
+                        id="mainSubtitle"
+                        class="main-subtitle"
+                    >
+                        Файл номерин тандаңыз
+                    </div>
+
+                </div>
+
+                <button
+                    class="circle-btn"
+                    title="Меню"
+                    onclick="toggleMoreMenu()"
+                >
+                    ⋮
+                </button>
+
+            </header>
+
+
+            <!-- MESSAGE AREA -->
+
+            <section
+                id="messageArea"
+                class="message-area"
+            >
+
+                <div class="welcome-box">
+
+                    <div class="welcome-icon">💬</div>
+
+                    <h2>Такрир</h2>
+
+                    <p>
+                        Бул жерден катталган файлдарды
+                        WhatsAppтагы чат сыяктуу ача аласыз.
+                    </p>
+
+                    <p>
+                        Жаңы видео кошуу үчүн
+                        <b>＋</b> баскычын басыңыз.
+                    </p>
+
+                </div>
+
+            </section>
+
+
+            <!-- FLOATING PLUS -->
+
+            <button
+                class="floating-plus"
+                title="Файл кошуу"
+                onclick="openNumberModal()"
+            >
+                ＋
+            </button>
+
+        </main>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+ THREE DOT MENU
+======================================================= -->
+
+<div
+    id="moreMenu"
+    class="more-menu"
+>
+
+    <button onclick="googleLogin()">
+        🔐 Google аккаунт тандоо
+    </button>
+
+    <button onclick="openSettings()">
+        ⚙️ Настройка
+    </button>
+
+    <button onclick="refreshFiles()">
+        🔄 Жаңыртуу
+    </button>
+
+    <button onclick="logoutUser()">
+        🚪 Аккаунттан чыгуу
+    </button>
+
+</div>
+
+
+<!-- =======================================================
+ FILE NUMBER MODAL
+======================================================= -->
+
+<div
+    id="numberModal"
+    class="modal-overlay"
+>
+
+    <div class="modal">
+
+        <h2>＋ Файл каттоо</h2>
+
+        <p>
+            Файл номерин киргизиңиз.
+            Мисалы: 001, 025, 154.
+        </p>
+
+        <input
+            id="fileNumberInput"
+            type="text"
+            placeholder="Файл номери"
+            autocomplete="off"
+        >
+
+        <div class="modal-actions">
+
+            <button
+                class="btn-cancel"
+                onclick="closeModal('numberModal')"
+            >
+                Жокко чыгаруу
+            </button>
+
+            <button
+                class="btn-green"
+                onclick="continueNumber()"
+            >
+                Улантуу
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+ VIDEO SELECT MODAL
+======================================================= -->
+
+<div
+    id="videoModal"
+    class="modal-overlay"
+>
+
+    <div class="modal">
+
+        <h2>🎥 Выбрать файл</h2>
+
+        <p id="selectedNumberText">
+            Файл номери:
+        </p>
+
+        <label class="file-picker-label">
+
+            <strong>📂 Выбрать видео</strong>
+
+            <br>
+
+            <span style="color:#667781;font-size:13px">
+                Видео файлды ушул жерден тандаңыз
+            </span>
+
+            <input
+                id="videoInput"
+                type="file"
+                accept="video/*"
+            >
+
+        </label>
+
+        <div
+            id="selectedFileName"
+            class="selected-file"
+        >
+            Файл тандала элек
+        </div>
+
+        <div
+            id="uploadProgress"
+            class="upload-progress"
+        >
+
+            <div
+                id="uploadProgressBar"
+                class="upload-progress-bar"
+            ></div>
+
+        </div>
+
+        <div
+            id="uploadStatus"
+            class="upload-status"
+        ></div>
+
+        <div class="modal-actions">
+
+            <button
+                class="btn-cancel"
+                onclick="backToNumber()"
+            >
+                Артка
+            </button>
+
+            <button
+                id="registerButton"
+                class="btn-green"
+                disabled
+                onclick="registerVideo()"
+            >
+                Каттоо
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+ SETTINGS MODAL
+======================================================= -->
+
+<div
+    id="settingsModal"
+    class="modal-overlay"
+>
+
+    <div class="modal large">
+
+        <h2>⚙️ Настройка</h2>
+
+        <!-- ACCOUNT -->
+
+        <div class="settings-item">
+
+            <h3>👤 Аккаунт</h3>
+
+            <div class="account-settings">
+
+                <img
+                    id="settingsAvatar"
+                    src=""
+                    alt=""
+                >
+
+                <div>
+
+                    <b id="settingsName">
+                        -
+                    </b>
+
+                    <div
+                        id="settingsEmail"
+                        class="settings-muted"
+                    >
+                        -
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- GOOGLE DRIVE -->
+
+        <div class="settings-item">
+
+            <h3>📁 Google Drive папкасы</h3>
+
+            <div class="settings-muted">
+
+                Видео кайсы Google Drive папкасына
+                сакталары ушул жерде көрсөтүлөт.
+
+            </div>
+
+            <div
+                id="driveFolderBox"
+                class="folder-box"
+            >
+                Папка тандала элек.
+            </div>
+
+            <button
+                class="settings-button"
+                onclick="selectDriveFolder()"
+            >
+                📂 Google Drive'дан папка тандоо
+            </button>
+
+        </div>
+        <!-- GOOGLE ACCOUNT -->
+
+        <div class="settings-item">
+
+            <h3>🔐 Google аккаунт</h3>
+
+            <div class="settings-muted" id="googleAccountStatus">
+                Google аккаунт тандала элек. Басканда аккаунт тандоо терезеси ачылат.
+            </div>
+
+            <button
+                class="settings-button"
+                onclick="googleLogin()"
+            >
+                🔐 Google аккаунт тандоо
+            </button>
+
+        </div>
+
+
+        <!-- INFO -->
+
+        <div class="settings-item">
+
+            <h3>ℹ️ Маалымат</h3>
+
+            <div class="settings-muted">
+
+                Видео түздөн-түз тандалган Google Drive папкасына сакталат.
+                Ар бир файл номерине Drive ссылкасы жана QR код автоматтык түзүлөт.
+
+            </div>
+
+        </div>
+
+
+        <div class="modal-actions">
+
+            <button
+                class="btn-cancel"
+                onclick="closeModal('settingsModal')"
+            >
+                Жабуу
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+ TOAST
+======================================================= -->
+
+<div
+    id="toast"
+    class="toast"
+></div>
+
+
+
+
+
+<script>
+/* =========================================================
+   ТАКРИР — GOOGLE DRIVE VIDEO REGISTRATION
+   Google Drive ушул версияда колдонулат.
+========================================================= */
+
+/* Бул жерге Google Cloud Console'догу Web OAuth Client ID'ни кой. */
+const GOOGLE_CLIENT_ID =
+    "1070875797774-03j7qfohho2n7f2s2cvjbiqmasi55gue.apps.googleusercontent.com";
+
+/*
+ * Google OAuth Client ID жогоруда коюлган.
+ * Client Secret HTML файлына КОЮЛБАЙТ.
+ */
+
+/* Google Picker үчүн Browser API Key.
+ * Бул ачкыч Google Cloud Console'до API/HTTP referrer боюнча чектелиши керек.
+ */
+const GOOGLE_API_KEY = "AIzaSyBC4z-zmp18ZJ6VDlEecHvfX6ttjAmwdwE";
+
+/* Google Cloud project number / Picker App ID. */
+const GOOGLE_APP_ID = "1070875797774";
+
+const DRIVE_SCOPE = [
+    "openid",
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/drive.file"
+].join(" ");
+
+let currentUser = null;
+let driveAccessToken = null;
+let tokenClient = null;
+let selectedFileNumber = "";
+let selectedVideoFile = null;
+let currentFileId = null;
+
+function loadGoogleIdentityServices(callback){
+    if(window.google && google.accounts && google.accounts.oauth2){
+        callback();
+        return;
+    }
+    const old = document.getElementById("googleIdentityScript");
+    if(old){
+        const timer = setInterval(function(){
+            if(window.google && google.accounts && google.accounts.oauth2){
+                clearInterval(timer);
+                callback();
+            }
+        },100);
+        return;
+    }
+    const script=document.createElement("script");
+    script.id="googleIdentityScript";
+    script.src="https://accounts.google.com/gsi/client";
+    script.onload=callback;
+    script.onerror=function(){showToast("Google кирүү кызматы жүктөлгөн жок.");};
+    document.head.appendChild(script);
+}
+
+function googleLogin(){
+    closeMoreMenu();
+
+    loadGoogleIdentityServices(function(){
+
+        /*
+         * Ар бир жолу "Google аккаунт менен кирүү" басылганда
+         * аккаунт тандоо терезеси ачылат.
+         *
+         * prompt:"select_account" мааниси атайын колдонулууда.
+         * Ошондуктан мурда кирген аккаунт автоматтык тандалып
+         * кетпейт — Google аккаунт тандоо экраны чыгат.
+         */
+        if(!tokenClient){
+
+            tokenClient =
+                google.accounts.oauth2.initTokenClient({
+
+                    client_id:
+                        GOOGLE_CLIENT_ID,
+
+                    scope:
+                        DRIVE_SCOPE,
+
+                    include_granted_scopes:
+                        true,
+
+                    callback:
+                        async function(response){
+
+                            if(
+                                response &&
+                                response.access_token
+                            ){
+
+                                driveAccessToken =
+                                    response.access_token;
+
+                                await loadGoogleUser();
+
+                                showToast(
+                                    "✅ Google аккаунт тандалды"
+                                );
+
+                            }else{
+
+                                showToast(
+                                    "Google аккаунт тандоо аяктаган жок."
+                                );
+
+                            }
+
+                        }
+
+                });
+
+        }
+
+        /*
+         * Эң маанилүү жер:
+         * ар дайым select_account.
+         *
+         * Телефондо/компьютерде Google'га киргизилген
+         * жеткиликтүү аккаунттардын арасынан тандоо
+         * үчүн Google'дун өзүнүн аккаунт тандоо терезеси ачылат.
+         */
+        tokenClient.requestAccessToken({
+            prompt:
+                "select_account"
+        });
+
+    });
+}
+
+async function loadGoogleUser(){
+    try{
+        const r=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{
+            headers:{Authorization:"Bearer "+driveAccessToken}
+        });
+        if(!r.ok) throw new Error("Google userinfo error");
+        currentUser=await r.json();
+        localStorage.setItem("takrir_google_user",JSON.stringify(currentUser));
+        updateUserUI();
+        showToast("✅ Google аккаунт менен кирдиңиз");
+        await syncFilesFromDrive();
+    }catch(e){
+        console.error(e);
+        showToast("Google аккаунт маалыматтарын алуу мүмкүн болгон жок.");
+    }
+}
+
+function restoreGoogleUser(){
+    try{
+        currentUser=JSON.parse(localStorage.getItem("takrir_google_user")||"null");
+    }catch(e){currentUser=null;}
+    updateUserUI();
+}
+
+function updateUserUI(){
+    const name=currentUser?.name||"Google аккаунт";
+    const email=currentUser?.email||"Google аккаунт тандоо керек";
+    const picture=currentUser?.picture||createAvatar(name);
+    ["userAvatar","settingsAvatar"].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.src=picture;
+    });
+    const nameEl=document.getElementById("userName"); if(nameEl) nameEl.textContent=name;
+    const emailEl=document.getElementById("userEmail"); if(emailEl) emailEl.textContent=email;
+    const sn=document.getElementById("settingsName"); if(sn) sn.textContent=name;
+    const se=document.getElementById("settingsEmail"); if(se) se.textContent=currentUser?.email||"-";
+    const st=document.getElementById("googleAccountStatus");
+    if(st) st.textContent=currentUser ? ("Кирилди: "+(currentUser.email||name)) : "Google аккаунт тандала элек. Басканда аккаунт тандоо терезеси ачылат.";
+}
+
+function userStorageKey(){
+    return "takrir_files_"+(currentUser?.sub||currentUser?.email||"guest");
+}
+function folderStorageKey(){
+    return "takrir_folder_"+(currentUser?.sub||currentUser?.email||"guest");
+}
+function getFiles(){
+    try{return JSON.parse(localStorage.getItem(userStorageKey())||"[]");}
+    catch(e){return [];}
+}
+function saveFiles(files){localStorage.setItem(userStorageKey(),JSON.stringify(files));}
+function getSelectedFolder(){
+    try{return JSON.parse(localStorage.getItem(folderStorageKey())||"null");}
+    catch(e){return null;}
+}
+function saveSelectedFolder(folder){localStorage.setItem(folderStorageKey(),JSON.stringify(folder));}
+
+function ensureDriveToken(){
+    return new Promise(function(resolve,reject){
+        if(driveAccessToken){resolve(driveAccessToken);return;}
+        if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){
+            reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));
+            return;
+        }
+        loadGoogleIdentityServices(function(){
+            if(!tokenClient){
+                tokenClient=google.accounts.oauth2.initTokenClient({
+                    client_id:GOOGLE_CLIENT_ID,
+                    scope:DRIVE_SCOPE,
+                    callback:function(response){
+                        if(response?.access_token){
+                            driveAccessToken=response.access_token;
+                            loadGoogleUser().catch(()=>{});
+                            resolve(driveAccessToken);
+                        }else reject(new Error("Google token алынган жок."));
+                    }
+                });
+            }else{
+                const old=tokenClient.callback;
+                tokenClient.callback=function(response){
+                    tokenClient.callback=old;
+                    if(response?.access_token){driveAccessToken=response.access_token;resolve(driveAccessToken);}
+                    else reject(new Error("Google token алынган жок."));
+                };
+            }
+            // Папка тандоодо мурун тандалган Google аккаунттун
+            // уруксаты бар болсо кайра аккаунт тандатпайбыз.
+            // Аккаунтту атайын ⋮ -> Google аккаунт менен кирүү
+            // басканда гана "select_account" ачылат.
+            tokenClient.requestAccessToken({
+                prompt:""
+            });
+        });
+    });
+}
+
+function savePageState(page){sessionStorage.setItem("takrir_current_page",page);}
+function restorePage(){
+    const id=sessionStorage.getItem("takrir_current_file");
+    if(id){
+        const f=getFiles().find(x=>String(x.id)===String(id));
+        if(f){openFile(f);return;}
+    }
+    showWelcome();
+}
+
+function openNumberModal(){
+    closeMoreMenu();
+    document.getElementById("fileNumberInput").value="";
+    document.getElementById("numberModal").style.display="flex";
+    setTimeout(()=>document.getElementById("fileNumberInput").focus(),100);
+}
+function closeModal(id){const el=document.getElementById(id);if(el)el.style.display="none";}
+function continueNumber(){
+    const input=document.getElementById("fileNumberInput");
+    let number=input.value.trim().replace(/\s+/g,"");
+    if(!number){showToast("⚠️ Файл номерин киргизиңиз.");input.focus();return;}
+    selectedFileNumber=number;
+    document.getElementById("selectedNumberText").textContent="Файл номери: "+number;
+    document.getElementById("videoInput").value="";
+    selectedVideoFile=null;
+    document.getElementById("selectedFileName").textContent="Файл тандала элек";
+    document.getElementById("registerButton").disabled=true;
+    document.getElementById("uploadStatus").textContent="";
+    document.getElementById("uploadProgress").style.display="none";
+    closeModal("numberModal");
+    document.getElementById("videoModal").style.display="flex";
+}
+function backToNumber(){closeModal("videoModal");openNumberModal();}
+
+document.getElementById("videoInput").addEventListener("change",function(){
+    const file=this.files?.[0]||null;
+    selectedVideoFile=file;
+    if(file){
+        document.getElementById("selectedFileName").textContent="Тандалды: "+file.name;
+        document.getElementById("registerButton").disabled=false;
+    }else{
+        document.getElementById("selectedFileName").textContent="Файл тандала элек";
+        document.getElementById("registerButton").disabled=true;
+    }
+});
+
+async function registerVideo(){
+    if(!selectedFileNumber){showToast("Файл номери жок.");return;}
+    if(!selectedVideoFile){showToast("Видео тандаңыз.");return;}
+    const files=getFiles();
+    const duplicate=files.find(x=>String(x.number)===String(selectedFileNumber));
+    if(duplicate && !confirm("Бул файл номери мурун катталган. Эски файлды ушул видео менен алмаштырасызбы?")) return;
+
+    const button=document.getElementById("registerButton");
+    button.disabled=true;
+    document.getElementById("uploadProgress").style.display="block";
+    document.getElementById("uploadProgressBar").style.width="0%";
+    document.getElementById("uploadStatus").textContent="⏳ Google Drive'га жүктөлүп жатат...";
+
+    try{
+        if(!currentUser){
+            await new Promise((resolve,reject)=>{
+                const old=showToast;
+                alert("Адегенде ⋮ менюсунан Google аккаунт менен кириңиз.");
+                reject(new Error("Google login required"));
+            });
+        }
+        const data=await uploadVideoToDrive(selectedVideoFile,selectedFileNumber,function(percent){
+            document.getElementById("uploadProgressBar").style.width=percent+"%";
+            document.getElementById("uploadStatus").textContent="⏳ Google Drive'га жүктөлүүдө: "+percent+"%";
+        });
+        const item={
+            id:data.id,
+            number:selectedFileNumber,
+            name:selectedVideoFile.name,
+            type:"video",
+            url:data.url,
+            driveId:data.id,
+            driveWebViewLink:data.url,
+            mimeType:selectedVideoFile.type||"video/mp4",
+            size:selectedVideoFile.size,
+            date:new Date().toLocaleString("ky-KG"),
+            folder:getSelectedFolder()
+        };
+        const newFiles=files.filter(x=>String(x.number)!==String(selectedFileNumber));
+        newFiles.unshift(item);
+        saveFiles(newFiles);
+        closeModal("videoModal");
+        selectedVideoFile=null;
+        selectedFileNumber="";
+        document.getElementById("uploadStatus").textContent="";
+        renderChatList();
+        openFile(item);
+        showToast("✅ Файл ийгиликтүү Google Drive'га сакталды");
+    }catch(error){
+        console.error(error);
+        document.getElementById("uploadStatus").textContent="❌ "+(error.message||"Жүктөөдө ката кетти.");
+        button.disabled=false;
+    }
+}
+
+async function uploadVideoToDrive(file,number,onProgress){
+    const token=await ensureDriveToken();
+    const folder=getSelectedFolder();
+    const metadata={
+        name:file.name,
+        mimeType:file.type||"video/mp4",
+        appProperties:{takrir:"1",fileNumber:String(number)},
+        ...(folder?.id ? {parents:[folder.id]} : {})
+    };
+    const init=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,webContentLink,createdTime",{
+        method:"POST",
+        headers:{
+            Authorization:"Bearer "+token,
+            "Content-Type":"application/json; charset=UTF-8",
+            "X-Upload-Content-Type":file.type||"video/mp4",
+            "X-Upload-Content-Length":String(file.size)
+        },
+        body:JSON.stringify(metadata)
+    });
+    if(!init.ok) throw new Error("Drive upload башталган жок: "+await init.text());
+    const location=init.headers.get("Location");
+    if(!location) throw new Error("Google Drive upload URL алынган жок.");
+
+    const uploaded=await new Promise(function(resolve,reject){
+        const xhr=new XMLHttpRequest();
+        xhr.open("PUT",location,true);
+        xhr.setRequestHeader("Content-Type",file.type||"video/mp4");
+        xhr.upload.onprogress=function(e){
+            if(e.lengthComputable && onProgress) onProgress(Math.min(99,Math.round(e.loaded/e.total*100)));
+        };
+        xhr.onload=function(){
+            if(xhr.status>=200 && xhr.status<300){
+                try{resolve(JSON.parse(xhr.responseText));}catch(e){reject(e);}
+            }else reject(new Error("Drive файл жүктөөдө ката: "+xhr.responseText));
+        };
+        xhr.onerror=function(){reject(new Error("Интернет же Google Drive байланышында ката кетти."));};
+        xhr.send(file);
+    });
+    if(onProgress) onProgress(100);
+    const id=uploaded.id;
+    let url=uploaded.webViewLink||("https://drive.google.com/file/d/"+id+"/view?usp=sharing");
+    try{
+        await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"/permissions",{
+            method:"POST",
+            headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+            body:JSON.stringify({type:"anyone",role:"reader"})
+        });
+    }catch(e){console.warn("Public sharing permission берилген жок",e);}
+    return {...uploaded,id,url};
+}
+
+function renderChatList(){
+    const list=document.getElementById("chatList");
+    const q=(document.getElementById("searchInput")?.value||"").trim().toLowerCase();
+    const files=getFiles().filter(f=>String(f.number||"").toLowerCase().includes(q));
+    if(!files.length){
+        list.innerHTML='<div style="padding:28px;text-align:center;color:#667781">Файл номерлери азырынча жок</div>';
+        return;
+    }
+    list.innerHTML=files.map(file=>`\
+        <div class="chat-item" onclick="openFileById('${escapeAttr(file.id)}')">\
+            <div class="chat-avatar">🎥</div>\
+            <div class="chat-content">\
+                <div class="chat-top">\
+                    <div class="chat-name">${escapeHTML(file.number)}</div>\
+                    <div class="chat-time">${escapeHTML(file.date||"")}</div>\
+                </div>\
+                <div class="chat-preview">🎥 ${escapeHTML(file.name||"Видео")}</div>\
+            </div>\
+        </div>`).join("");
+}
+function openFileById(id){const f=getFiles().find(x=>String(x.id)===String(id));if(f)openFile(f);}
+
+function openFile(file){
+    if(!file)return;
+    currentFileId=file.id;
+    sessionStorage.setItem("takrir_current_file",String(file.id));
+    savePageState("file");
+    document.getElementById("mainTitle").textContent=file.number;
+    document.getElementById("mainSubtitle").textContent="Файл номер: "+file.number;
+    document.getElementById("appShell").classList.add("file-open");
+    const videoUrl="https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/preview";
+    const shareUrl=file.url||("https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/view?usp=sharing");
+    const qrURL="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(shareUrl);
+    document.getElementById("messageArea").innerHTML=`\
+        <div class="file-view">\
+            <div class="video-wrap">\
+                <iframe src="${videoUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>\
+            </div>\
+            <div class="info-block"><label class="info-label">📁 Файл номери</label><div class="info-value">${escapeHTML(file.number)}</div></div>\
+            <div class="info-block"><label class="info-label">🔗 Ссылка</label><div class="link-box">${escapeHTML(shareUrl)}</div></div>\
+            <div class="qr-section"><label class="info-label">📱 QR код</label><img src="${qrURL}" alt="QR код"></div>\
+            <div class="action-row">\
+                <button class="action-btn" onclick="shareLink('${escapeAttr(shareUrl)}')">↗️ Бөлүшүү</button>\
+                <button class="action-btn" onclick="copyText('${escapeAttr(shareUrl)}')">🔗 Ссылкасын копировать кылуу</button>\
+                <button class="action-btn" onclick="copyQR('${escapeAttr(qrURL)}')">📱 QR кодту копировать кылуу</button>\
+            </div>\
+            <div class="delete-row"><button class="delete-btn" onclick="deleteFile('${escapeAttr(file.id)}')">🗑️ Сайттан өчүрүү</button></div>\
+        </div>`;
+    renderChatList();
+    document.getElementById("appShell").classList.add("chat-open");
+}
+
+function showWelcome(){
+    currentFileId=null;
+    sessionStorage.removeItem("takrir_current_file");
+    savePageState("home");
+    document.getElementById("appShell").classList.remove("file-open");
+    document.getElementById("mainTitle").textContent="Такрир";
+    document.getElementById("mainSubtitle").textContent="Файл номерлери";
+    document.getElementById("messageArea").innerHTML=`<div class="welcome-box"><div class="welcome-icon">🎥</div><h2>Такрир</h2><p>Катталган файл номерлери ушул жерде чыгат.</p><p>Жаңы видео кошуу үчүн төмөнкү <b>＋</b> баскычын басыңыз.</p></div>`;
+    renderChatList();
+}
+function closeMobileChat(){document.getElementById("appShell").classList.remove("chat-open","file-open");showWelcome();}
+
+function deleteFile(id){
+    if(!confirm("Бул файл номерин сайттагы тизмеден өчүрөсүзбү? Google Drive'дагы видео сакталат."))return;
+    saveFiles(getFiles().filter(f=>String(f.id)!==String(id)));
+    if(String(currentFileId)===String(id))showWelcome(); else renderChatList();
+    showToast("✅ Файл сайттан өчүрүлдү. Google Drive'дагы видео сакталды.");
+}
+
+async function copyText(text){
+    try{await navigator.clipboard.writeText(text);showToast("✅ Ссылка көчүрүлдү.");}
+    catch(e){const input=document.createElement("textarea");input.value=text;input.style.position="fixed";input.style.opacity="0";document.body.appendChild(input);input.select();document.execCommand("copy");input.remove();showToast("✅ Ссылка көчүрүлдү.");}
+}
+async function copyQR(qrURL){
+    try{
+        const response=await fetch(qrURL);const blob=await response.blob();
+        if(navigator.clipboard&&window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]);showToast("✅ QR код көчүрүлдү.");return;}
+    }catch(e){}
+    window.open(qrURL,"_blank");showToast("QR код ачылды.");
+}
+async function shareLink(url){
+    if(navigator.share){try{await navigator.share({title:currentFileId?String(document.getElementById("mainTitle").textContent):"Такрир",text:"Видео ссылкасы",url});return;}catch(e){if(e.name==="AbortError")return;}}
+    copyText(url);
+}
+
+function toggleMoreMenu(){
+    const menu=document.getElementById("moreMenu");
+    menu.style.display=menu.style.display==="block"?"none":"block";
+}
+function closeMoreMenu(){document.getElementById("moreMenu").style.display="none";}
+function openSettings(){
+    closeMoreMenu();
+    updateUserUI();
+    updateDriveFolderBox();
+    document.getElementById("settingsModal").style.display="flex";
+}
+function updateDriveFolderBox(){
+    const box=document.getElementById("driveFolderBox");
+    const folder=getSelectedFolder();
+    box.textContent=folder?"📁 Папка: "+folder.name+"\nID: "+folder.id:"📁 Папка тандала элек. Видео Google Drive'дын негизги папкасына сакталат.";
+}
+
+function selectDriveFolder(){
+    if(!currentUser){
+        alert("Адегенде ⋮ менюсунан Google аккаунт менен кириңиз.");
+        return;
+    }
+
+    if(GOOGLE_CLIENT_ID.startsWith("YOUR_") || GOOGLE_API_KEY.startsWith("YOUR_")){
+        alert("Google Drive папка тандоо үчүн Google Client ID жана API Key толтурулушу керек.");
+        return;
+    }
+
+    // Эгер аккаунт мурун тандалып, access token дагы жарактуу болсо,
+    // Google аккаунтун кайра тандатпай түз эле Picker ачабыз.
+    if(driveAccessToken){
+        loadGooglePicker(driveAccessToken);
+        return;
+    }
+
+    loadGoogleIdentityServices(function(){
+        ensureDriveToken()
+            .then(token => loadGooglePicker(token))
+            .catch(e => {
+                console.error(e);
+                alert("Google Drive уруксатын алуу мүмкүн болгон жок. ⋮ → Google аккаунт менен кирүү аркылуу аккаунтту кайра тандап көрүңүз.");
+            });
+    });
+}
+function loadGooglePicker(token){
+    if(window.google?.picker){createPicker(token);return;}
+    const old=document.getElementById("googlePickerScript");
+    if(old){const t=setInterval(()=>{if(window.google?.picker){clearInterval(t);createPicker(token);}},100);return;}
+    const script=document.createElement("script");script.id="googlePickerScript";script.src="https://apis.google.com/js/api.js";
+    script.onload=function(){gapi.load("picker",{callback:function(){createPicker(token);}});};
+    script.onerror=function(){
+        showToast("Google Picker жүктөлгөн жок. Google Picker API күйгүзүлгөнүн текшериңиз.");
+    };
+    document.head.appendChild(script);
+}
+function createPicker(accessToken){
+    const view=new google.picker.DocsView(google.picker.ViewId.FOLDERS);
+    view.setIncludeFolders(true);view.setSelectFolderEnabled(true);
+    const picker=new google.picker.PickerBuilder().setDeveloperKey(GOOGLE_API_KEY).setAppId(GOOGLE_APP_ID).setOAuthToken(accessToken).setOrigin(window.location.protocol + "//" + window.location.host).addView(view).setCallback(function(data){
+        if(data.action===google.picker.Action.PICKED){
+            const d=data.docs[0];saveSelectedFolder({id:d.id,name:d.name});updateDriveFolderBox();showToast("✅ Google Drive папка тандалды.");
+        }
+    }).build();
+    picker.setVisible(true);
+}
+
+async function syncFilesFromDrive(){
+    if(!driveAccessToken)return;
+    try{
+        const r=await fetch("https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent("trashed=false and appProperties has { key='takrir', value='1' }")+"&spaces=drive&pageSize=1000&orderBy=createdTime desc&fields=files(id,name,mimeType,size,webViewLink,webContentLink,createdTime,appProperties,parents)",{
+            headers:{Authorization:"Bearer "+driveAccessToken}
+        });
+        if(!r.ok)throw new Error(await r.text());
+        const data=await r.json();
+        const files=(data.files||[]).map(f=>({
+            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:"video",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",folder:getSelectedFolder()
+        }));
+        if(files.length)saveFiles(files);
+        renderChatList();
+    }catch(e){console.warn("Drive файлдарын жаңыртуу мүмкүн болгон жок",e);}
+}
+function refreshFiles(){closeMoreMenu();if(driveAccessToken)syncFilesFromDrive();else renderChatList();showToast("🔄 Жаңыртылды.");}
+function logoutUser(){driveAccessToken=null;currentUser=null;localStorage.removeItem("takrir_google_user");updateUserUI();showToast("Аккаунттан чыктыңыз.");}
+function showToast(message){
+    const toast=document.getElementById("toast");toast.textContent=message;toast.style.display="block";clearTimeout(window.takrirToastTimer);window.takrirToastTimer=setTimeout(()=>toast.style.display="none",2800);
+}
+function createAvatar(name){
+    const letter=String(name||"A").trim().charAt(0).toUpperCase();
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="50" r="50" fill="#dfe5e7"/><text x="50" y="61" text-anchor="middle" font-family="Arial" font-size="42" fill="#54656f">${escapeHTML(letter)}</text></svg>`;
+    return "data:image/svg+xml;charset=UTF-8,"+encodeURIComponent(svg);
+}
+function escapeHTML(text){return String(text??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");}
+function escapeAttr(text){return String(text??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\"/g,"&quot;");}
+
+document.getElementById("fileNumberInput").addEventListener("keydown",function(e){if(e.key==="Enter")continueNumber();});
+document.querySelectorAll(".modal-overlay").forEach(modal=>modal.addEventListener("click",function(e){if(e.target===modal)modal.style.display="none";}));
+document.addEventListener("click",function(event){const menu=document.getElementById("moreMenu");if(menu.style.display!=="block")return;if(!event.target.closest(".more-menu")&&!event.target.closest(".circle-btn"))closeMoreMenu();});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"){closeMoreMenu();document.querySelectorAll(".modal-overlay").forEach(m=>m.style.display="none");}});
+document.getElementById("videoInput").addEventListener("change",function(){const f=this.files?.[0];if(f&&f.size>1024*1024*1024){alert("Видео 1 GB'дан кичине болсун.");this.value="";selectedVideoFile=null;document.getElementById("registerButton").disabled=true;}});
+
+/* Башкы бетте гана плюс көрүнөт; файл ачылганда толугу менен жашырылат. */
+const style=document.createElement("style");
+style.textContent=`.file-open .floating-plus{display:none!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer}.chat-item:hover{background:#f0f2f5}.info-value{font-size:18px;font-weight:600;padding:10px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}`;
+document.head.appendChild(style);
+
+document.addEventListener("DOMContentLoaded",async function(){
+    restoreGoogleUser();
+    renderChatList();
+    showWelcome();
+    /* Эски каттоо болсо, Google аккаунт киргенден кийин Drive'дан кайра жүктөйт. */
+});
+</script>
+
+</body>
+</html>
