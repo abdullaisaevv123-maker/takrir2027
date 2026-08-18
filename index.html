@@ -1504,6 +1504,8 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 </div>
 
 
+<input id="nativeCameraInput" type="file" accept="image/*,video/*" capture="environment" style="display:none" onchange="handleNativeCameraFile(this.files[0])">
+
 <!-- =======================================================
  CAMERA CAPTURE MODAL
 ======================================================= -->
@@ -2095,37 +2097,87 @@ async function registerVideo(){
     }
 }
 
+function getNativeMediaInput(){
+  let input=document.getElementById('nativeMediaInput');
+  if(!input){
+    input=document.createElement('input');
+    input.type='file';
+    input.id='nativeMediaInput';
+    input.accept='image/*,video/*';
+    input.setAttribute('capture','environment');
+    input.style.cssText='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;';
+    input.addEventListener('change',handleNativeMediaSelection);
+    document.body.appendChild(input);
+  }
+  return input;
+}
+
 function openNativeMediaCapture(){
-  const input=document.getElementById('nativeMediaInput');
-  if(!input){showToast('Файл тандоо ачылган жок.');return;}
-  // Clear the previous value so selecting the same file again still fires change.
+  // Бул функция түздөн-түз ➕ менюсүндөгү колдонуучунун басуусунан чакырылат.
+  // Android/iPhone: capture="environment" → түзмөктүн камера/медиа интерфейси.
+  // Компьютер: capture колдоого алынбаса → кадимки файл тандоо терезеси.
+  const input=getNativeMediaInput();
   input.value='';
-  // On phones, capture="environment" lets the OS/browser offer the camera.
-  // On computers, the same input opens the normal file picker.
-  input.click();
+  try{
+    input.click();
+  }catch(e){
+    showToast('Файл тандоону ачуу мүмкүн болгон жок.');
+  }
 }
 
 function handleNativeMediaSelection(event){
   const file=event.target.files && event.target.files[0];
   if(!file)return;
-  const isPhoto=file.type.startsWith('image/');
-  const isVideo=file.type.startsWith('video/');
-  if(!isPhoto && !isVideo){showToast('Сүрөт же видео гана тандаңыз.');return;}
+
+  const isPhoto=file.type && file.type.startsWith('image/');
+  const isVideo=file.type && file.type.startsWith('video/');
+  if(!isPhoto && !isVideo){
+    showToast('Сүрөт же видео гана тандаңыз.');
+    return;
+  }
+
   selectedVideoFile=file;
   selectedMediaType=isPhoto?'photo':'video';
   cameraCapturedPending=true;
-  // Continue through the existing registration flow without opening a browser camera preview.
+
+  closePlusMediaChooser();
+
+  // Файл тандалгандан кийин гана номер жана Ф.И.О. киргизүү ачылат.
   const status=document.getElementById('selectedFileName');
   if(status)status.textContent=(isPhoto?'📷 ':'🎥 ')+file.name;
+
   showToast(isPhoto?'📷 Сүрөт тандалды.':'🎥 Видео тандалды.');
-  // If the current flow has a selected number, leave the file ready for the existing "Жөнөтүү" action.
-  if(typeof renderUploadPanel==='function')renderUploadPanel();
+
+  // Учурдагы каттоо агымын колдонобуз. continueNumber() камера/медиа файлын сактап калат.
+  openNumberModal();
 }
 
 async function openCameraCapture(){
     closePlusMediaChooser();
-    // Камера дароо ачылат. Файл номери жана Ф.И.О. тарткандан кийин киргизилет.
-    await startCameraCapture();
+    // Телефондо: браузердин ичиндеги камера эмес, түзмөктүн өзүнүн камера/медиа интерфейси.
+    // Компьютерде: кадимки файл тандоо терезеси ачылат.
+    const input=document.getElementById('nativeCameraInput');
+    if(input){
+      input.value='';
+      input.click();
+    }
+}
+function handleNativeCameraFile(file){
+    if(!file) return;
+    // Камера/файл тандоодон алынган медианы кадимки каттоо агымына беребиз.
+    window.selectedMediaFile = file;
+    const isVideo = file.type && file.type.startsWith('video/');
+    const type = isVideo ? 'video' : 'photo';
+    // Эгер номер талаасы мурда толтурулган болсо — кийинки каттоого даярдайбыз.
+    if(typeof selectedMediaType !== 'undefined') selectedMediaType = type;
+    if(typeof selectedFile !== 'undefined') selectedFile = file;
+    if(typeof showToast === 'function') showToast((isVideo?'🎥 Видео':'📷 Сүрөт')+' тандалды: '+file.name);
+    // Бар болгон файл каттоо модалын колдонобуз.
+    if(typeof openRegistrationModal === 'function'){
+      try{ openRegistrationModal(type,file); }catch(e){}
+    }else if(typeof showRegisterModal === 'function'){
+      try{ showRegisterModal(type,file); }catch(e){}
+    }
 }
 async function startCameraCapture(){
     const modal=document.getElementById('cameraModal'); if(!modal)return;
