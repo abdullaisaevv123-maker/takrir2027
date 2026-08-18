@@ -1116,13 +1116,13 @@
         const db = firebase.firestore();
 
         // === CLOUDINARY: 3 АККАУНТ, ЖАҢЫ СҮРӨТТӨР ҮЧҮН ===
-        // 1) oojjfj4c / pamyat2
-        // 2) tfjn735t / pamyat3
-        // 3) lubzzsqe / ml_default
+        // 1) oojjfj4c / pamyat1
+        // 2) tfjn735t / pamyat2
+        // 3) lubzzsqe / pamyat3
         const CLOUDINARY_ACCOUNTS = [
-            { id: 'cloud1', label: 'Cloudinary 1 — pamyat2', cloudName: 'oojjfj4c', uploadPreset: 'pamyat2' },
-            { id: 'cloud2', label: 'Cloudinary 2 — pamyat3', cloudName: 'tfjn735t', uploadPreset: 'pamyat3' },
-            { id: 'cloud3', label: 'Cloudinary 3 — ml_default', cloudName: 'lubzzsqe', uploadPreset: 'ml_default' }
+            { id: 'cloud1', label: 'Cloudinary 1 — pamyat1', cloudName: 'oojjfj4c', uploadPreset: 'pamyat1' },
+            { id: 'cloud2', label: 'Cloudinary 2 — pamyat2', cloudName: 'tfjn735t', uploadPreset: 'pamyat2' },
+            { id: 'cloud3', label: 'Cloudinary 3 — pamyat3', cloudName: 'lubzzsqe', uploadPreset: 'pamyat3' }
         ];
         const CLOUDINARY_ROTATION_KEY = 'bait_cloudinary_rotation_index_v1';
         let lastCloudinaryUpload = null;
@@ -2838,8 +2838,31 @@
                     if(!src)continue;
                     try{
                         const resp=await fetch(src);
+                        if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
                         const blob=await resp.blob();
-                        folder.file(`${label}.jpg`,blob);
+
+                        // Cloudinary кээде WebP/AVIF кайтарышы мүмкүн.
+                        // Ошондуктан ZIP ичинде кеңейтүүсү гана эмес, өзү да чыныгы JPEG болот.
+                        const imageUrl=URL.createObjectURL(blob);
+                        try{
+                            const image=await new Promise((resolve,reject)=>{
+                                const im=new Image();
+                                im.onload=()=>resolve(im);
+                                im.onerror=()=>reject(new Error('Сүрөттү ачуу мүмкүн болгон жок'));
+                                im.src=imageUrl;
+                            });
+                            const canvas=document.createElement('canvas');
+                            canvas.width=image.naturalWidth||image.width;
+                            canvas.height=image.naturalHeight||image.height;
+                            const ctx=canvas.getContext('2d',{alpha:false});
+                            ctx.drawImage(image,0,0,canvas.width,canvas.height);
+                            const jpegBlob=await new Promise((resolve,reject)=>{
+                                canvas.toBlob(b=>b?resolve(b):reject(new Error('JPEG түзүлгөн жок')),'image/jpeg',0.95);
+                            });
+                            folder.file(`${label}.jpg`,jpegBlob);
+                        } finally {
+                            URL.revokeObjectURL(imageUrl);
+                        }
                         count++;
                     }catch(e){ console.error('Сүрөт жүктөөдө ката:',e); }
                 }
