@@ -1151,7 +1151,7 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
             <div class="file-filters" id="fileFilters">
                 <button class="filter-btn active" data-filter="all" onclick="setFileFilter('all')">Баары</button>
                 <button class="filter-btn" data-filter="unread" onclick="setFileFilter('unread')">Окулбаган</button>
-                <button class="filter-btn" data-filter="import" onclick="openBulkImport()">Жүктөө</button>
+                <button class="filter-btn" data-filter="import" onclick="setFileFilter('import')">Жүктөө</button>
                 <button class="filter-btn" data-filter="duplicates" onclick="setFileFilter('duplicates')">Толук катталгандар</button>
             </div>
 
@@ -1280,6 +1280,9 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
     <button onclick="refreshFiles()">
         🔄 Жаңыртуу
+    </button>
+    <button onclick="googleLoginFromMenu()">
+        🔐 Google аккаунт менен кирүү
     </button>
 
 
@@ -2574,7 +2577,7 @@ const _renderChatList=window.renderChatList;
 window.renderChatList=function(){
  const list=document.getElementById('chatList');if(!list)return;let files=getDisplayFiles();
  if(!files.length){list.innerHTML='<div style="padding:28px;text-align:center;color:#667781">Файл номерлери азырынча жок</div>';return}
- list.innerHTML=files.map(file=>{const selected=selectedFileIds.has(String(file.id));return `<div class="chat-item ${file.unread?'unread':''} ${selected?'selected-row':''}" data-file-id="${escapeAttr(file.id)}" onpointerdown="handleChatPointerDown(event,'${escapeAttr(file.id)}')" onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onpointercancel="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onclick="handleChatClick(event,'${escapeAttr(file.id)}')"><div class="chat-avatar person-avatar"><span>${escapeHTML(String(file.number||''))}</span></div><div class="chat-body"><div class="chat-top"><div class="chat-name">${escapeHTML(file.number)}${file.unread?'<span class="unread-badge">1</span>':''}</div><div class="chat-time">${escapeHTML(file.date||'')}</div></div><div class="chat-preview">${escapeHTML(file.name||'Видео')}</div></div><button class="chat-more-btn" onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button></div>`}).join('');
+ list.innerHTML=files.map(file=>{const selected=selectedFileIds.has(String(file.id));return `<div class="chat-item ${file.unread?'unread':''} ${selected?'selected-row':''}" data-file-id="${escapeAttr(file.id)}" onpointerdown="handleChatPointerDown(event,'${escapeAttr(file.id)}')" onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onpointercancel="handleChatPointerCancel()" oncontextmenu="handleDesktopContext(event,'${escapeAttr(file.id)}');return false;"><div class="chat-avatar person-avatar"><span>${escapeHTML(String(file.number||''))}</span></div><div class="chat-body"><div class="chat-top"><div class="chat-name">${escapeHTML(file.number)}${file.unread?'<span class="unread-badge">1</span>':''}</div><div class="chat-time">${escapeHTML(file.date||'')}</div></div><div class="chat-preview">${escapeHTML(file.name||'Видео')}</div></div><button class="chat-more-btn" onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button></div>`}).join('');
  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===fileFilter)); const y=document.getElementById('userYear'); if(y)y.textContent=String(takrirYear);
 };
 function handleChatClick(e,id){if(selectionMode)return;const f=getFiles().find(x=>String(x.id)===String(id));if(f)openFile(f)}
@@ -2630,7 +2633,7 @@ setTimeout(()=>{updateYearLabel();document.querySelectorAll('.filter-btn').forEa
       const selected=selectedFileIds.has(String(file.id));
       const progress=(file.uploading||file.type==='pending')?Math.max(0,Math.min(100,Number(file.uploadProgress||0))):100;
       const prog=progress<100?`<div class="row-upload"><div class="row-upload-bar" style="width:${progress}%"></div><span>${progress}%</span></div>`:'';
-      return `<div class="chat-item ${file.unread?'unread':''} ${selected?'selected-row':''}" data-file-id="${escapeAttr(file.id)}" onpointerdown="handleChatPointerDown(event,'${escapeAttr(file.id)}')" onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onpointercancel="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onclick="handleChatClick(event,'${escapeAttr(file.id)}')"><div class="chat-avatar person-avatar"><span>${escapeHTML(String(file.number||''))}</span></div><div class="chat-body"><div class="chat-top"><div class="chat-name">${escapeHTML(file.number)}${file.unread?'<span class="unread-badge">1</span>':''}</div><div class="chat-time">${escapeHTML(file.date||'')}</div></div><div class="chat-preview">${escapeHTML(file.name||'Видео')}${file.uploading?' • Жүктөлүүдө':''}</div>${prog}</div><button class="chat-more-btn" onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button></div>`;
+      return `<div class="chat-item ${file.unread?'unread':''} ${selected?'selected-row':''}" data-file-id="${escapeAttr(file.id)}" onpointerdown="handleChatPointerDown(event,'${escapeAttr(file.id)}')" onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')" onpointercancel="handleChatPointerCancel()" oncontextmenu="handleDesktopContext(event,'${escapeAttr(file.id)}');return false;"><div class="chat-avatar person-avatar"><span>${escapeHTML(String(file.number||''))}</span></div><div class="chat-body"><div class="chat-top"><div class="chat-name">${escapeHTML(file.number)}${file.unread?'<span class="unread-badge">1</span>':''}</div><div class="chat-time">${escapeHTML(file.date||'')}</div></div><div class="chat-preview">${escapeHTML(file.name||'Видео')}${file.uploading?' • Жүктөлүүдө':''}</div>${prog}</div><button class="chat-more-btn" onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button></div>`;
     }).join('');
     const y=document.getElementById('userYear');if(y)y.textContent=String(takrirYear);
   };
@@ -2694,5 +2697,147 @@ setTimeout(()=>{updateYearLabel();document.querySelectorAll('.filter-btn').forEa
   setTimeout(renderChatList,80);
 })();
 </script>
+
+<style>
+/* FINAL PATCH: Жүктөө кадимки бөлүм болуп ачылат */
+.bulk-add-btn{display:none;position:absolute;right:16px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:22px;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.search-area{position:relative}
+.search-area:has(#bulkAddBtn[style*="flex"]) .search-box{padding-right:54px}
+.bulk-inline-row{height:66px!important;padding:7px 14px!important}
+.bulk-inline-row .chat-avatar{width:46px;height:46px;min-width:46px;font-size:12px}
+.bulk-inline-row .chat-name{font-size:17px}
+.bulk-inline-row .bulk-index{color:#00a884;font-size:12px;font-weight:700;margin-right:5px}
+.bulk-inline-row .bulk-status{font-size:11px;color:#667781}
+body.dark-mode .bulk-inline-row{background:#111b21;color:#e9edef;border-color:#202c33}
+body.dark-mode .bulk-inline-row:hover{background:#202c33}
+</style>
+<script>
+/* =========================================================
+   FINAL PATCH v4
+   - Жүктөө modal эмес, кадимки тизмеде ачылат.
+   - + издөө талаасынын оң бурчунда Жүктөөдө гана көрүнөт.
+   - 2 секунд кармоо тандоо режими; кадимки басуу файлды ачат.
+   - 3 чекит менюга Google аккаунт менен кирүү кошулат.
+========================================================= */
+(function(){
+  const oldSetFileFilter=window.setFileFilter;
+  window.setFileFilter=function(f){
+    fileFilter=f;
+    localStorage.setItem('takrir_filter',f);
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));
+    const plus=document.getElementById('bulkAddBtn');
+    if(plus) plus.style.display=(f==='import'?'flex':'none');
+    renderChatList();
+  };
+
+  window.googleLoginFromMenu=function(){
+    closeMoreMenu();
+    if(currentUser){
+      showToast('✅ Кирилген Google аккаунт: '+(currentUser.email||'аккаунт'));
+      return;
+    }
+    googleLogin();
+  };
+
+  // Жүктөө бөлүмүнө киргенде modal ачылбайт.
+  window.openBulkImport=function(){
+    fileFilter='import';
+    localStorage.setItem('takrir_filter','import');
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter==='import'));
+    const plus=document.getElementById('bulkAddBtn');
+    if(plus) plus.style.display='flex';
+    renderChatList();
+  };
+
+  window.openBulkAdd=function(){
+    const a=document.getElementById('bulkAddArea');
+    const modal=document.getElementById('bulkImportModal');
+    // Эски modal колдонулбайт. + басылганда ошол эле бетте кичинекей inline input ачылат.
+    let box=document.getElementById('bulkInlineEditor');
+    if(!box){
+      box=document.createElement('div');
+      box.id='bulkInlineEditor';
+      box.style.cssText='padding:10px 12px;background:#f0f2f5;border-bottom:1px solid #ddd;';
+      box.innerHTML=`<textarea id="bulkInlineInput" maxlength="1200" placeholder="Ар бир номерди жаңы сапка жазыңыз (100гө чейин)" style="width:100%;min-height:110px;border:1px solid #d1d5db;border-radius:10px;padding:10px;font-size:15px;resize:vertical"></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button type="button" onclick="closeBulkAddInline()" style="border:0;border-radius:9px;padding:9px 14px;background:#e5e7eb">Жабуу</button><button type="button" onclick="importBulkNumbersInline()" style="border:0;border-radius:9px;padding:9px 14px;background:#00a884;color:#fff;font-weight:700">Кошуу</button></div>`;
+      const list=document.getElementById('chatList');
+      list.parentNode.insertBefore(box,list);
+    }
+    box.style.display='block';
+    setTimeout(()=>document.getElementById('bulkInlineInput')?.focus(),50);
+  };
+  window.closeBulkAddInline=function(){const b=document.getElementById('bulkInlineEditor');if(b)b.style.display='none';};
+  window.importBulkNumbersInline=function(){
+    const input=document.getElementById('bulkInlineInput');
+    const text=(input?.value||'').trim();
+    if(!text){showToast('⚠️ Файл номерлерин киргизиңиз.');return;}
+    let nums=text.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean).slice(0,100);
+    const old=getBulkNumbers();
+    const merged=Array.from(new Set(old.concat(nums)));
+    saveBulkNumbers(merged);
+    if(input) input.value='';
+    closeBulkAddInline();
+    renderChatList();
+    showToast('✅ '+nums.length+' номер Жүктөө тизмесине кошулду');
+  };
+
+  // Жүктөө тизмесин кадимки chat-list ичинде көрсөтүү.
+  const finalRender=window.renderChatList;
+  window.renderChatList=function(){
+    if(fileFilter!=='import'){
+      const editor=document.getElementById('bulkInlineEditor');
+      if(editor) editor.style.display='none';
+      const plus=document.getElementById('bulkAddBtn');
+      if(plus) plus.style.display='none';
+      return finalRender();
+    }
+
+    const editor=document.getElementById('bulkInlineEditor');
+    if(editor) editor.style.display='none';
+    const plus=document.getElementById('bulkAddBtn');
+    if(plus) plus.style.display='flex';
+
+    const list=document.getElementById('chatList');
+    if(!list)return;
+    const q=(document.getElementById('searchInput')?.value||'').trim().toLowerCase();
+    const nums=getBulkNumbers().filter(n=>!q||String(n).toLowerCase().includes(q));
+    const c=counts();
+    const btns={all:`Баары <small>${c.all}</small>`,unread:`Окулбаган <small>${c.unread}</small>`,import:`Жүктөө <small>${c.bulk}</small>`,duplicates:`Толук катталгандар <small>${c.full}</small>`};
+    document.querySelectorAll('.filter-btn').forEach(b=>{b.innerHTML=btns[b.dataset.filter]||b.textContent;b.classList.toggle('active',b.dataset.filter==='import');});
+    if(!nums.length){list.innerHTML='<div class="empty-list">Жүктөө тизмеси бош.<br>Издөөнүн жанындагы <b>＋</b> баскычын басып номерлерди кошуңуз.</div>';return;}
+    list.innerHTML=nums.map((n,i)=>`<div class="chat-item bulk-inline-row" data-bulk-number="${escapeAttr(n)}"><div class="chat-avatar person-avatar"><span>${escapeHTML(n)}</span></div><div class="chat-body"><div class="chat-top"><div class="chat-name"><span class="bulk-index">${i+1}</span>${escapeHTML(n)}</div><div class="chat-time">${escapeHTML(String(takrirYear))}</div></div><div class="chat-preview bulk-status">Киргизилген файл номери</div></div></div>`).join('');
+  };
+
+  // Эки секунд кармоо тандоо режимин баштайт. Кадимки басуу — файлды ачат.
+  window.handleChatPointerDown=function(event,id){
+    if(event.target.closest('.chat-more-btn')) return;
+    if(event.button!==undefined && event.button!==0 && event.pointerType!=='touch') return;
+    clearTimeout(longPressTimer);
+    window.takrirLongPressTriggered=false;
+    longPressTimer=setTimeout(()=>{
+      window.takrirLongPressTriggered=true;
+      toggleSelectedFile(id);
+      if(navigator.vibrate)try{navigator.vibrate(35)}catch(e){}
+    },2000);
+  };
+  window.handleChatPointerUp=function(event,id){
+    if(event.target.closest('.chat-more-btn')) return;
+    clearTimeout(longPressTimer);
+    if(window.takrirLongPressTriggered){window.takrirLongPressTriggered=false;return;}
+    if(selectionMode){toggleSelectedFile(id);return;}
+    openFileById(id);
+  };
+  window.handleChatPointerCancel=function(){clearTimeout(longPressTimer);window.takrirLongPressTriggered=false;};
+  window.handleDesktopContext=function(event,id){return;};
+
+  // Баштапкы абалда Жүктөө эмес, кадимки Баары көрүнөт.
+  const originalDOMContentLoaded = document.readyState;
+  setTimeout(()=>{
+    const plus=document.getElementById('bulkAddBtn');
+    if(plus) plus.style.display=(fileFilter==='import'?'flex':'none');
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===fileFilter));
+  },80);
+})();
+</script>
+
 </body>
 </html>
