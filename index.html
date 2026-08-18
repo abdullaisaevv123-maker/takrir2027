@@ -663,6 +663,61 @@ button{
     transform:scale(1.03);
 }
 
+
+/* =========================================================
+   PLUS MEDIA CHOOSER — WhatsApp style
+========================================================= */
+.plus-media-chooser{
+    position:fixed;
+    left:calc(350px - 78px);
+    bottom:174px;
+    z-index:9001;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    gap:9px;
+}
+.plus-media-chooser.show{display:flex;}
+.plus-media-option{
+    width:58px;
+    min-height:58px;
+    border:0;
+    border-radius:50%;
+    color:#fff;
+    font-size:25px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    box-shadow:0 4px 12px rgba(0,0,0,.25);
+    transition:transform .16s ease, opacity .16s ease;
+}
+.plus-media-option span{
+    position:absolute;
+    left:68px;
+    white-space:nowrap;
+    background:rgba(20,30,35,.92);
+    color:#fff;
+    padding:7px 11px;
+    border-radius:9px;
+    font-size:13px;
+    font-weight:600;
+}
+.plus-media-option:hover{transform:scale(1.06);}
+.plus-video{background:#128c7e;}
+.plus-photo{background:#7b61ff;}
+@media(max-width:700px){
+    .plus-media-chooser{
+        left:auto;
+        right:18px;
+        bottom:174px;
+    }
+    .plus-media-option span{
+        left:auto;
+        right:68px;
+    }
+}
+
 /* =========================================================
    THREE DOT MENU
 ========================================================= */
@@ -1370,13 +1425,11 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
         <label class="file-picker-label">
 
-            <strong>📂 Выбрать видео</strong>
+            <strong id="mediaPickerTitle">📂 Выбрать видео</strong>
 
             <br>
 
-            <span style="color:#667781;font-size:13px">
-                Видео файлды ушул жерден тандаңыз
-            </span>
+            <span id="mediaPickerHint" style="color:#667781;font-size:13px">Видео файлды ушул жерден тандаңыз</span>
 
             <input
                 id="videoInput"
@@ -1599,7 +1652,15 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 </div>
 
 <!-- WhatsApp сыяктуу туруктуу +: файл ачылганда да көрүнөт -->
-<button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="openNumberModal()">＋</button>
+<div id="plusMediaChooser" class="plus-media-chooser" aria-hidden="true">
+    <button type="button" class="plus-media-option plus-video" onclick="chooseMediaType('video')" title="Видео">
+        🎥<span>Видео</span>
+    </button>
+    <button type="button" class="plus-media-option plus-photo" onclick="chooseMediaType('photo')" title="Сүрөт">
+        📷<span>Сүрөт</span>
+    </button>
+</div>
+<button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="togglePlusMediaChooser()">＋</button>
 
 <!-- BULK FILE NUMBER IMPORT -->
 <div id="bulkImportModal" class="modal-overlay" onclick="if(event.target===this)closeBulkImport()">
@@ -1822,8 +1883,47 @@ function restorePage(){
     showWelcome();
 }
 
+
+let selectedMediaType="video";
+
+function togglePlusMediaChooser(){
+    const menu=document.getElementById("plusMediaChooser");
+    if(!menu)return;
+    const show=!menu.classList.contains("show");
+    menu.classList.toggle("show",show);
+    menu.setAttribute("aria-hidden",show?"false":"true");
+}
+
+function closePlusMediaChooser(){
+    const menu=document.getElementById("plusMediaChooser");
+    if(menu){
+        menu.classList.remove("show");
+        menu.setAttribute("aria-hidden","true");
+    }
+}
+
+function chooseMediaType(type){
+    selectedMediaType=(type==="photo")?"photo":"video";
+    closePlusMediaChooser();
+
+    const title=document.getElementById("mediaPickerTitle");
+    const hint=document.getElementById("mediaPickerHint");
+    const input=document.getElementById("videoInput");
+    const button=document.getElementById("registerButton");
+
+    if(input){
+        input.value="";
+        input.accept=selectedMediaType==="photo"?"image/*":"video/*";
+    }
+    if(title) title.textContent=selectedMediaType==="photo"?"📂 Сүрөт тандоо":"📂 Видео тандоо";
+    if(hint) hint.textContent=selectedMediaType==="photo"?"Сүрөт файлды ушул жерден тандаңыз":"Видео файлды ушул жерден тандаңыз";
+    if(button) button.textContent=selectedMediaType==="photo"?"Жөнөтүү":"Жөнөтүү";
+
+    openNumberModal();
+}
 function openNumberModal(){
     closeMoreMenu();
+    closePlusMediaChooser();
     document.getElementById("fileNumberInput").value="";
     document.getElementById("numberModal").style.display="flex";
     setTimeout(()=>document.getElementById("fileNumberInput").focus(),100);
@@ -3080,6 +3180,14 @@ body::before{
     setTimeout(refreshEnhancements,350);
   });
 })();
+
+document.addEventListener("click",function(e){
+    const menu=document.getElementById("plusMediaChooser");
+    const plus=document.getElementById("floatingPlus");
+    if(menu && menu.classList.contains("show") && !menu.contains(e.target) && e.target!==plus){
+        closePlusMediaChooser();
+    }
+});
 </script>
 </body>
 </html>
