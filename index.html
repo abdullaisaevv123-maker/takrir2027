@@ -706,6 +706,14 @@ button{
 .plus-media-option:hover{transform:scale(1.06);}
 .plus-video{background:#128c7e;}
 .plus-photo{background:#7b61ff;}
+.plus-camera{background:#ff7a45;}
+.plus-media-option span{display:none!important;}
+.camera-modal{width:min(620px,96vw)!important;}
+#cameraPreview{width:100%;max-height:58vh;background:#101010;border-radius:14px;object-fit:cover;display:block;margin-top:12px;}
+.camera-actions{flex-wrap:wrap;}
+.camera-actions button{min-width:120px;}
+.camera-recording{background:#dc3545!important;animation:cameraPulse 1s infinite;}
+@keyframes cameraPulse{50%{box-shadow:0 0 0 7px rgba(220,53,69,.15)}}
 @media(max-width:700px){
     .plus-media-chooser{
         left:auto;
@@ -1383,6 +1391,14 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
             autocomplete="off"
         >
 
+        <input
+            id="filePersonInput"
+            type="text"
+            placeholder="Ф.И.О. (кааласаңыз)"
+            autocomplete="name"
+            style="margin-top:10px"
+        >
+
         <div class="modal-actions">
 
             <button
@@ -1487,6 +1503,32 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
 </div>
 
+
+<!-- =======================================================
+ CAMERA CAPTURE MODAL
+======================================================= -->
+<div id="cameraModal" class="modal-overlay" onclick="if(event.target===this)closeCameraCapture()">
+  <div class="modal camera-modal">
+    <h2>📹 Камера</h2>
+    <p id="cameraNumberText">Файл номери:</p>
+    <video id="cameraPreview" autoplay playsinline muted></video>
+    <canvas id="cameraCanvas" style="display:none"></canvas>
+    <div id="cameraStatus" class="upload-status"></div>
+    <div class="modal-actions camera-actions">
+      <button class="btn-cancel" type="button" onclick="closeCameraCapture()">Жабуу</button>
+      <button class="btn-green" type="button" id="cameraPhotoBtn" onclick="captureCameraPhoto()">📷 Сүрөт</button>
+      <button class="btn-green" type="button" id="cameraRecordBtn" onclick="toggleCameraRecording()">⏺ Видео</button>
+    </div>
+    <div id="cameraPreviewResult" style="display:none;margin-top:12px">
+      <div class="settings-muted">Тартылган файл даяр:</div>
+      <div id="cameraCapturedName" class="selected-file"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" type="button" onclick="retakeCameraCapture()">Кайра тартуу</button>
+        <button class="btn-green" type="button" onclick="useCameraCapture()">Колдонуу</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- =======================================================
  SETTINGS MODAL
@@ -1653,12 +1695,9 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
 <!-- WhatsApp сыяктуу туруктуу +: файл ачылганда да көрүнөт -->
 <div id="plusMediaChooser" class="plus-media-chooser" aria-hidden="true">
-    <button type="button" class="plus-media-option plus-video" onclick="chooseMediaType('video')" title="Видео">
-        🎥<span>Видео</span>
-    </button>
-    <button type="button" class="plus-media-option plus-photo" onclick="chooseMediaType('photo')" title="Сүрөт">
-        📷<span>Сүрөт</span>
-    </button>
+    <button type="button" class="plus-media-option plus-video" onclick="chooseMediaType('video')" title="Видео" aria-label="Видео">🎥</button>
+    <button type="button" class="plus-media-option plus-photo" onclick="chooseMediaType('photo')" title="Сүрөт" aria-label="Сүрөт">📷</button>
+    <button type="button" class="plus-media-option plus-camera" onclick="openNativeMediaCapture()" title="Камера" aria-label="Камера">📹</button>
 </div>
 <button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="togglePlusMediaChooser()">＋</button>
 
@@ -1885,6 +1924,12 @@ function restorePage(){
 
 
 let selectedMediaType="video";
+let selectedPersonName="";
+let cameraStream=null;
+let cameraRecorder=null;
+let cameraChunks=[];
+let cameraCapturedFile=null;
+let cameraCapturedPending=false;
 
 function togglePlusMediaChooser(){
     const menu=document.getElementById("plusMediaChooser");
@@ -1925,6 +1970,7 @@ function openNumberModal(){
     closeMoreMenu();
     closePlusMediaChooser();
     document.getElementById("fileNumberInput").value="";
+    const person=document.getElementById("filePersonInput"); if(person) person.value="";
     document.getElementById("numberModal").style.display="flex";
     setTimeout(()=>document.getElementById("fileNumberInput").focus(),100);
 }
@@ -1939,11 +1985,18 @@ function continueNumber(){
     let number=input.value.trim().replace(/\s+/g,"");
     if(!number){showToast("⚠️ Файл номерин киргизиңиз.");input.focus();return;}
     selectedFileNumber=number;
-    document.getElementById("selectedNumberText").textContent="Файл номери: "+number;
+    selectedPersonName=(document.getElementById("filePersonInput")?.value||"").trim();
+    document.getElementById("selectedNumberText").textContent="Файл номери: "+number+(selectedPersonName?" — "+selectedPersonName:"");
     document.getElementById("videoInput").value="";
-    selectedVideoFile=null;
-    document.getElementById("selectedFileName").textContent="Файл тандала элек";
-    document.getElementById("registerButton").disabled=true;
+    if(!cameraCapturedPending){
+        selectedVideoFile=null;
+        document.getElementById("selectedFileName").textContent="Файл тандала элек";
+        document.getElementById("registerButton").disabled=true;
+    }else{
+        document.getElementById("selectedFileName").textContent="Тандалды: "+(selectedVideoFile?.name||"Камера файлы");
+        document.getElementById("registerButton").disabled=!selectedVideoFile;
+        cameraCapturedPending=false;
+    }
     document.getElementById("uploadStatus").textContent="";
     document.getElementById("uploadProgress").style.display="none";
     closeModal("numberModal");
@@ -1965,7 +2018,7 @@ document.getElementById("videoInput").addEventListener("change",function(){
 
 async function registerVideo(){
     if(!selectedFileNumber){showToast("Файл номери жок.");return;}
-    if(!selectedVideoFile){showToast("Видео тандаңыз.");return;}
+    if(!selectedVideoFile){showToast(selectedMediaType==="photo"?"Сүрөт тандаңыз.":"Видео тандаңыз.");return;}
     const folder=getSelectedFolder();
     if(!folder?.id){
         showToast("⚠️ Алгач Настройкадан Google Drive папкасын тандаңыз.");
@@ -2008,8 +2061,9 @@ async function registerVideo(){
         const item={
             id:data.id,
             number:selectedFileNumber,
+            personName:selectedPersonName,
             name:selectedVideoFile.name,
-            type:"video",
+            type:selectedMediaType==='photo'?"photo":"video",
             url:data.url,
             driveId:data.id,
             driveWebViewLink:data.url,
@@ -2017,7 +2071,8 @@ async function registerVideo(){
             size:selectedVideoFile.size,
             date:new Date().toLocaleString("ky-KG"),
             folder:folder,
-            unread:true
+            unread:true,
+            mediaIcon:selectedMediaType==='photo'?"📷":"🎥"
         };
         const newFiles=files.filter(x=>String(x.number)!==String(selectedFileNumber));
         newFiles.unshift(item);
@@ -2040,6 +2095,107 @@ async function registerVideo(){
     }
 }
 
+function openNativeMediaCapture(){
+  const input=document.getElementById('nativeMediaInput');
+  if(!input){showToast('Файл тандоо ачылган жок.');return;}
+  // Clear the previous value so selecting the same file again still fires change.
+  input.value='';
+  // On phones, capture="environment" lets the OS/browser offer the camera.
+  // On computers, the same input opens the normal file picker.
+  input.click();
+}
+
+function handleNativeMediaSelection(event){
+  const file=event.target.files && event.target.files[0];
+  if(!file)return;
+  const isPhoto=file.type.startsWith('image/');
+  const isVideo=file.type.startsWith('video/');
+  if(!isPhoto && !isVideo){showToast('Сүрөт же видео гана тандаңыз.');return;}
+  selectedVideoFile=file;
+  selectedMediaType=isPhoto?'photo':'video';
+  cameraCapturedPending=true;
+  // Continue through the existing registration flow without opening a browser camera preview.
+  const status=document.getElementById('selectedFileName');
+  if(status)status.textContent=(isPhoto?'📷 ':'🎥 ')+file.name;
+  showToast(isPhoto?'📷 Сүрөт тандалды.':'🎥 Видео тандалды.');
+  // If the current flow has a selected number, leave the file ready for the existing "Жөнөтүү" action.
+  if(typeof renderUploadPanel==='function')renderUploadPanel();
+}
+
+async function openCameraCapture(){
+    closePlusMediaChooser();
+    // Камера дароо ачылат. Файл номери жана Ф.И.О. тарткандан кийин киргизилет.
+    await startCameraCapture();
+}
+async function startCameraCapture(){
+    const modal=document.getElementById('cameraModal'); if(!modal)return;
+    cameraCapturedFile=null; cameraChunks=[];
+    const preview=document.getElementById('cameraPreview');
+    document.getElementById('cameraPreviewResult').style.display='none';
+    document.getElementById('cameraStatus').textContent='Камерага уруксат суралууда...';
+    try{
+      cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:true});
+      preview.srcObject=cameraStream;
+      document.getElementById('cameraStatus').textContent='📹 Камера даяр. Сүрөткө тартыңыз же видеону баштаңыз.';
+      modal.style.display='flex';
+    }catch(e){
+      document.getElementById('cameraStatus').textContent='❌ Камера ачылган жок: '+(e.message||e);
+      modal.style.display='flex';
+    }
+}
+function stopCameraStream(){
+    if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}
+}
+function closeCameraCapture(){
+    if(cameraRecorder && cameraRecorder.state!=='inactive'){try{cameraRecorder.stop();}catch(e){}}
+    stopCameraStream();
+    const m=document.getElementById('cameraModal'); if(m)m.style.display='none';
+    cameraCapturedFile=null; cameraChunks=[];
+}
+function captureCameraPhoto(){
+    if(!cameraStream){showToast('Камера ачылган жок.');return;}
+    const video=document.getElementById('cameraPreview'), canvas=document.getElementById('cameraCanvas');
+    canvas.width=video.videoWidth||1280; canvas.height=video.videoHeight||720;
+    canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
+    canvas.toBlob(blob=>{
+      cameraCapturedFile=new File([blob],(selectedFileNumber||'photo')+'.jpg',{type:'image/jpeg'});
+      document.getElementById('cameraCapturedName').textContent='📷 '+cameraCapturedFile.name;
+      document.getElementById('cameraPreviewResult').style.display='block';
+      document.getElementById('cameraStatus').textContent='Сүрөт даяр.';
+      stopCameraStream();
+    },'image/jpeg',.92);
+}
+function toggleCameraRecording(){
+    if(!cameraStream){showToast('Камера ачылган жок.');return;}
+    const btn=document.getElementById('cameraRecordBtn');
+    if(cameraRecorder && cameraRecorder.state==='recording'){
+      cameraRecorder.stop(); btn.textContent='⏺ Видео'; btn.classList.remove('camera-recording'); return;
+    }
+    cameraChunks=[];
+    const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
+    cameraRecorder=new MediaRecorder(cameraStream,{mimeType:mime});
+    cameraRecorder.ondataavailable=e=>{if(e.data.size)cameraChunks.push(e.data)};
+    cameraRecorder.onstop=()=>{
+      const blob=new Blob(cameraChunks,{type:mime});
+      cameraCapturedFile=new File([blob],(selectedFileNumber||'video')+'.webm',{type:mime});
+      document.getElementById('cameraCapturedName').textContent='🎥 '+cameraCapturedFile.name;
+      document.getElementById('cameraPreviewResult').style.display='block';
+      document.getElementById('cameraStatus').textContent='Видео даяр.';
+      stopCameraStream();
+    };
+    cameraRecorder.start(250); btn.textContent='⏹ Токтотуу'; btn.classList.add('camera-recording');
+    document.getElementById('cameraStatus').textContent='🔴 Видео тартылып жатат...';
+}
+function retakeCameraCapture(){cameraCapturedFile=null;startCameraCapture();}
+function useCameraCapture(){
+    if(!cameraCapturedFile){showToast('Алгач сүрөт же видео тартыңыз.');return;}
+    selectedVideoFile=cameraCapturedFile;
+    selectedMediaType=cameraCapturedFile.type.startsWith('image/')?'photo':'video';
+    cameraCapturedPending=true;
+    closeCameraCapture();
+    openNumberModal();
+}
+
 async function findDriveFileByNumber(number){
     const token=await ensureDriveToken();
     const q="trashed=false and appProperties has { key='takrir' and value='1' }";
@@ -2050,7 +2206,7 @@ async function findDriveFileByNumber(number){
     return (data.files||[]).find(f=>String(f.appProperties?.fileNumber||"")===String(number))||null;
 }
 
-async function uploadVideoToDrive(file,number,onProgress){
+async function uploadVideoToDrive(file,number,onProgress,personNameOverride){
     const token=await ensureDriveToken();
     const folder=getSelectedFolder();
     if(!folder?.id) throw new Error("Google Drive папкасы тандалган эмес.");
@@ -2058,7 +2214,7 @@ async function uploadVideoToDrive(file,number,onProgress){
     const metadata={
         name:file.name,
         mimeType:file.type||"video/mp4",
-        appProperties:{takrir:"1",fileNumber:String(number)},
+        appProperties:{takrir:"1",fileNumber:String(number),personName:String(personNameOverride ?? selectedPersonName ?? "")},
         parents:[folder.id]
     };
 
@@ -2228,13 +2384,13 @@ function renderChatList(){
              onpointerup="handleChatPointerUp(event,'${escapeAttr(file.id)}')"
              onpointercancel="handleChatPointerCancel()"
              ondragstart="return false">
-            <div class="chat-avatar person-avatar" aria-hidden="true"><span>${escapeHTML(String(file.number||""))}</span></div>
+            <div class="chat-avatar person-avatar media-person-avatar" aria-hidden="true"><span class="media-avatar-icon">${file.type==='photo'?'📷':'🎥'}</span><span class="media-avatar-number">${escapeHTML(String(file.number||""))}</span></div>
             <div class="chat-content">
                 <div class="chat-top">
-                    <div class="chat-name">${escapeHTML(file.number)}</div>
+                    <div class="chat-name">${escapeHTML(file.personName||file.number)}</div>
                     <div class="chat-time">${escapeHTML(file.date||"")}</div>
                 </div>
-                <div class="chat-preview">${escapeHTML(file.name||"Видео")}</div>
+                <div class="chat-preview"><b>${escapeHTML(file.number||"")}</b> · ${file.type==='photo'?'📷 Сүрөт':'🎥 Видео'} · ${escapeHTML(file.name||"")}</div>
             </div>
             <button type="button" class="chat-more-btn" aria-label="Меню"
                     onclick="event.stopPropagation();openFileActions('${escapeAttr(file.id)}')">⋮</button>
@@ -2271,13 +2427,14 @@ function openFile(file){
     document.getElementById("appShell").classList.add("file-open"); const plus=document.getElementById("floatingPlus"); if(plus) plus.style.display="flex";
     const videoUrl="https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/preview";
     const shareUrl=file.url||("https://drive.google.com/file/d/"+encodeURIComponent(file.driveId||file.id)+"/view?usp=sharing");
+    const mediaBlock = String(file.type)==="photo" || String(file.mimeType||"").startsWith("image/")
+      ? `<div class="video-wrap photo-view"><img src="${escapeAttr(shareUrl)}" alt="${escapeAttr(file.number||'Сүрөт')}" style="width:100%;height:100%;object-fit:contain;background:#111" onerror="this.style.display='none';this.parentElement.innerHTML='<div style="padding:40px;text-align:center;color:white">📷 Сүрөттү Google Drive'дан ачыңыз</div>'"></div>`
+      : `<div class="video-wrap"><iframe src="${videoUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`;
     const qrURL="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(shareUrl);
     document.getElementById("messageArea").innerHTML=`\
         <div class="file-view">\
-            <div class="video-wrap">\
-                <iframe src="${videoUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>\
-            </div>\
-            <div class="info-block"><label class="info-label">📁 Файл номери</label><div class="info-value">${escapeHTML(file.number)}</div></div>\
+            ${mediaBlock}\
+            <div class="info-block"><label class="info-label">📁 Файл номери</label><div class="info-value">${escapeHTML(file.number)} ${file.personName?'<span style="font-size:16px;color:#667781;font-weight:600">— '+escapeHTML(file.personName)+'</span>':''}</div></div>\
             <div class="info-block"><label class="info-label">🔗 Ссылка</label><div class="link-box">${escapeHTML(shareUrl)}</div></div>\
             <div class="qr-section"><label class="info-label">📱 QR код</label><img src="${qrURL}" alt="QR код"></div>\
             <div class="action-row">\
@@ -2541,7 +2698,7 @@ async function syncFilesFromDrive(){
         if(!r.ok)throw new Error(await r.text());
         const data=await r.json();
         const rawFiles=(data.files||[]).map(f=>({
-            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:"video",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",createdTime:f.createdTime||"",folder:getSelectedFolder()
+            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:(String(f.mimeType||"").startsWith("image/")?"photo":"video"),personName:f.appProperties?.personName||"",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",createdTime:f.createdTime||"",folder:getSelectedFolder()
         }));
         const byNumber=new Map();
         rawFiles.sort((a,b)=>String(b.createdTime).localeCompare(String(a.createdTime))).forEach(f=>{
@@ -2614,7 +2771,11 @@ document.getElementById("videoInput").addEventListener("change",function(){const
 
 /* Файл ачылганда плюс көрүнбөйт; тизмеде дайыма бир жерде турат. */
 const style=document.createElement("style");
-style.textContent=`.person-avatar{background:linear-gradient(145deg,#d9fdd3,#b7e4ff 48%,#ffd6d6)!important;color:#1f2d35!important;font-weight:800;font-size:12px;display:flex!important;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(255,255,255,.75),0 2px 7px rgba(0,0,0,.10)}.person-avatar span{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.05;padding:4px;white-space:normal;overflow:hidden;word-break:break-all}.chat-more-btn{display:block;border:0;background:transparent;color:#667781;font-size:24px;width:34px;height:40px;line-height:30px;cursor:pointer}.chat-more-btn:focus{display:block}.chat-item.selected-row{background:linear-gradient(90deg,#d9fdd3,#c9f7ff,#ffe0e0)!important;outline:2px solid #25d366;outline-offset:-2px}.selection-bar{position:fixed;z-index:10000;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:24px;background:#202c33;color:#fff;box-shadow:0 4px 18px rgba(0,0,0,.25);font-size:13px}.selection-bar button{border:0;border-radius:18px;padding:8px 10px;background:#00a884;color:#fff;cursor:pointer}.selection-bar button:last-child{background:#4a5a63}.folder-row-open.folder-open-big{font-size:16px;padding:11px 18px;border-radius:22px;min-width:90px}.folder-row-open.folder-open-big:hover{transform:scale(1.02)}.file-open .floating-plus{display:flex!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .15s,transform .12s}.chat-item:hover{background:linear-gradient(90deg,#f4fff8,#eef8ff,#fff4f4)}.chat-item:active{transform:scale(.995)}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}.chat-item.unread{background:#f7fffb}.chat-item.unread .chat-name{font-weight:800}.chat-item.unread .chat-time{color:#00a884;font-weight:700}.unread-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px}.sidebar{background:linear-gradient(180deg,#ffffff 0%,#f5fbff 35%,#f5fff8 70%,#fff8f5 100%)}.chat-list{background:radial-gradient(circle at 15% 10%,rgba(0,168,132,.07),transparent 28%),radial-gradient(circle at 90% 28%,rgba(83,189,235,.07),transparent 26%),radial-gradient(circle at 20% 85%,rgba(255,120,120,.06),transparent 24%),radial-gradient(circle at 85% 90%,rgba(255,180,70,.06),transparent 24%)}.sidebar-header{background:linear-gradient(90deg,#eaf8f4,#eef8ff,#fff3ef)}.main-header{background:linear-gradient(90deg,#eaf8f4,#edf8ff,#fff3ef)}`;
+style.textContent=`.person-avatar{background:linear-gradient(145deg,#d9fdd3,#b7e4ff 48%,#ffd6d6)!important;color:#1f2d35!important;font-weight:800;font-size:12px;display:flex!important;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(255,255,255,.75),0 2px 7px rgba(0,0,0,.10)}.person-avatar span{width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.05;padding:4px;white-space:normal;overflow:hidden;word-break:break-all}.media-person-avatar{position:relative!important;overflow:hidden!important;flex-direction:column!important;gap:0!important;background:linear-gradient(145deg,#d9fdd3,#d7efff,#ffe1e8)!important;}
+.media-avatar-icon{font-size:17px!important;line-height:18px!important;}
+.media-avatar-number{font-size:11px!important;line-height:13px!important;font-weight:900!important;max-width:48px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+.media-person-avatar + .chat-content .chat-name{font-weight:800!important;}
+.chat-more-btn{display:block;border:0;background:transparent;color:#667781;font-size:24px;width:34px;height:40px;line-height:30px;cursor:pointer}.chat-more-btn:focus{display:block}.chat-item.selected-row{background:linear-gradient(90deg,#d9fdd3,#c9f7ff,#ffe0e0)!important;outline:2px solid #25d366;outline-offset:-2px}.selection-bar{position:fixed;z-index:10000;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:24px;background:#202c33;color:#fff;box-shadow:0 4px 18px rgba(0,0,0,.25);font-size:13px}.selection-bar button{border:0;border-radius:18px;padding:8px 10px;background:#00a884;color:#fff;cursor:pointer}.selection-bar button:last-child{background:#4a5a63}.folder-row-open.folder-open-big{font-size:16px;padding:11px 18px;border-radius:22px;min-width:90px}.folder-row-open.folder-open-big:hover{transform:scale(1.02)}.file-open .floating-plus{display:flex!important}.video-wrap{width:100%;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9}.video-wrap iframe{width:100%;height:100%;border:0}.chat-item{cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .15s,transform .12s}.chat-item:hover{background:linear-gradient(90deg,#f4fff8,#eef8ff,#fff4f4)}.chat-item:active{transform:scale(.995)}.info-value{font-size:24px;font-weight:700;padding:8px 0}.link-box{word-break:break-all;background:#f0f2f5;padding:10px;border-radius:8px;font-size:13px;color:#54656f}.more-menu button:first-child{font-weight:600}.file-composer{display:flex;gap:8px;align-items:center;margin:16px 0 8px;background:#f0f2f5;border-radius:24px;padding:6px}.file-composer input{flex:1;border:0;outline:0;background:transparent;padding:10px 12px;font-size:15px}.file-composer button{width:42px;height:42px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:18px}.file-notes{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}.file-note{align-self:flex-start;max-width:90%;background:#d9fdd3;border-radius:8px;padding:7px 10px;box-shadow:0 1px 1px rgba(0,0,0,.08)}.file-note small{display:block;text-align:right;color:#667781;font-size:9px;margin-top:3px}.chat-item.unread{background:#f7fffb}.chat-item.unread .chat-name{font-weight:800}.chat-item.unread .chat-time{color:#00a884;font-weight:700}.unread-badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#25d366;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-left:6px}.sidebar{background:linear-gradient(180deg,#ffffff 0%,#f5fbff 35%,#f5fff8 70%,#fff8f5 100%)}.chat-list{background:radial-gradient(circle at 15% 10%,rgba(0,168,132,.07),transparent 28%),radial-gradient(circle at 90% 28%,rgba(83,189,235,.07),transparent 26%),radial-gradient(circle at 20% 85%,rgba(255,120,120,.06),transparent 24%),radial-gradient(circle at 85% 90%,rgba(255,180,70,.06),transparent 24%)}.sidebar-header{background:linear-gradient(90deg,#eaf8f4,#eef8ff,#fff3ef)}.main-header{background:linear-gradient(90deg,#eaf8f4,#edf8ff,#fff3ef)}`;
 document.head.appendChild(style);
 
 const extraStyle=document.createElement("style");
@@ -2807,20 +2968,21 @@ window.importBulkNumbers=function(){
   // Background/resumable upload: modal closes immediately, progress stays on its row.
   window.registerVideo=async function(){
     if(!selectedFileNumber){showToast('Файл номери жок.');return;}
-    if(!selectedVideoFile){showToast('Видео тандаңыз.');return;}
+    if(!selectedVideoFile){showToast(selectedMediaType==='photo'?'Сүрөт тандаңыз.':'Видео тандаңыз.');return;}
     const folder=getSelectedFolder(); if(!folder?.id){showToast('⚠️ Алгач Настройкадан Google Drive папкасын тандаңыз.');return;}
     const local=getFiles(); if(local.some(x=>String(x.number)===String(selectedFileNumber)&&x.type!=='pending')){showToast('⚠️ Бул файл номери буга чейин катталган.');return;}
-    const number=selectedFileNumber, file=selectedVideoFile, tempId='upload-'+Date.now()+'-'+Math.random().toString(36).slice(2);
-    const item={id:tempId,number,name:file.name,type:'video',url:'',driveId:null,mimeType:file.type||'video/mp4',size:file.size,date:new Date().toLocaleString('ky-KG'),createdTime:new Date().toISOString(),folder,unread:true,year:takrirYear,uploading:true,uploadProgress:0};
+    const number=selectedFileNumber, file=selectedVideoFile, mediaType=selectedMediaType==='photo'?'photo':'video', personName=selectedPersonName||'', tempId='upload-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+    const item={id:tempId,number,personName,name:file.name,type:mediaType,url:'',driveId:null,mimeType:file.type||(mediaType==='photo'?'image/jpeg':'video/mp4'),size:file.size,date:new Date().toLocaleString('ky-KG'),createdTime:new Date().toISOString(),folder,unread:true,year:takrirYear,uploading:true,uploadProgress:0};
     saveFiles([item,...local]); renderChatList(); showWelcome();
-    selectedVideoFile=null;selectedFileNumber='';document.getElementById('videoInput').value='';closeModal('videoModal');
+    selectedVideoFile=null;selectedFileNumber='';selectedPersonName='';document.getElementById('videoInput').value='';closeModal('videoModal');
     (async()=>{
       try{
         if(!currentUser)throw new Error('Google аккаунт тандалган эмес.');
         if(!driveAccessToken)await ensureDriveToken();
-        const dup=await findDriveFileByNumber(number);if(dup){throw new Error('Бул файл номери башка түзмөктө мурун катталган.');}
-        const data=await uploadVideoToDrive(file,number,(p)=>{const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);if(ix>=0){arr[ix]={...arr[ix],uploadProgress:p};saveFiles(arr);renderChatList();}});
-        const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);if(ix>=0){arr[ix]={...arr[ix],id:data.id,driveId:data.id,url:data.url,driveWebViewLink:data.url,uploading:false,uploadProgress:100,type:'video',unread:true};saveFiles(arr);renderChatList();showToast('✅ '+number+' катталды');}
+        const dup=await findDriveFileByNumber(number);if(dup)throw new Error('Бул файл номери башка түзмөктө мурун катталган.');
+        const data=await uploadVideoToDrive(file,number,(p)=>{const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);if(ix>=0){arr[ix]={...arr[ix],uploadProgress:p};saveFiles(arr);renderChatList();}},personName);
+        const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);
+        if(ix>=0){arr[ix]={...arr[ix],id:data.id,driveId:data.id,url:data.url,driveWebViewLink:data.url,uploading:false,uploadProgress:100,type:mediaType,personName,unread:true};saveFiles(arr);renderChatList();showToast('✅ '+number+' катталды');}
       }catch(err){
         const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);if(ix>=0){arr[ix]={...arr[ix],uploading:false,uploadError:err.message,uploadProgress:0};saveFiles(arr);renderChatList();}
         showToast('❌ '+(err.message||'Жүктөөдө ката кетти'));
