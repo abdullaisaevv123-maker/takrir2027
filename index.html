@@ -2743,5 +2743,343 @@ window.importBulkNumbers=function(){
 <script>
 window.setFileFilter = window.setFileFilter || function(f){};
 </script>
+
+<!-- =========================================================
+     TAKRIR MAXIMUM EXPERIENCE LAYER v7
+     Бул катмар мурунку иштеген функцияларды бузбайт.
+     WhatsApp стилиндеги UX, статистика, тез аракеттер,
+     клавиатура, издөө, түстөр, анимация жана жеткиликтүүлүк.
+========================================================= -->
+<style id="takrir-max-ui">
+:root{
+  --mx-accent:#00a884;
+  --mx-accent-2:#25d366;
+  --mx-blue:#53bdeb;
+  --mx-pink:#ff6b8a;
+  --mx-orange:#ff9f43;
+  --mx-purple:#7c5cff;
+  --mx-ink:#172026;
+  --mx-muted:#667781;
+  --mx-card:rgba(255,255,255,.92);
+  --mx-line:rgba(84,102,112,.14);
+  --mx-shadow:0 14px 40px rgba(32,44,51,.12);
+}
+body{transition:background .35s ease,color .35s ease}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
+  background:
+   radial-gradient(circle at 8% 8%,rgba(0,168,132,.10),transparent 24%),
+   radial-gradient(circle at 92% 12%,rgba(83,189,235,.10),transparent 24%),
+   radial-gradient(circle at 88% 88%,rgba(255,107,138,.08),transparent 26%),
+   radial-gradient(circle at 10% 90%,rgba(255,159,67,.08),transparent 25%);
+}
+.app-shell{position:relative;isolation:isolate}
+.sidebar{position:relative;box-shadow:inset -1px 0 var(--mx-line)}
+.sidebar::after{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--mx-accent),var(--mx-blue),var(--mx-pink),var(--mx-orange));z-index:20}
+.sidebar-header,.main-header{backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.profile-name-row{position:relative}
+.profile-name-row::after{content:"";width:7px;height:7px;border-radius:50%;background:#25d366;box-shadow:0 0 0 4px rgba(37,211,102,.13);display:inline-block}
+.profile-year{margin-left:2px}
+.search-area{position:relative;padding:9px 12px 6px}
+.search-box{box-shadow:0 1px 2px rgba(32,44,51,.06),0 0 0 1px rgba(84,102,112,.05);transition:.2s}
+.search-box:focus{box-shadow:0 0 0 3px rgba(0,168,132,.13),0 8px 22px rgba(0,168,132,.08)}
+.bulk-add-btn{transition:transform .18s,box-shadow .18s!important}
+.bulk-add-btn:hover{transform:scale(1.08) rotate(5deg);box-shadow:0 8px 20px rgba(0,168,132,.25)!important}
+.file-filters{scrollbar-width:none}
+.file-filters::-webkit-scrollbar{display:none}
+.filter-btn{transition:.2s!important;border:1px solid transparent!important}
+.filter-btn:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(32,44,51,.08)}
+.filter-btn.active{box-shadow:0 6px 16px rgba(0,168,132,.20)!important}
+.chat-list{padding-bottom:120px;scroll-behavior:smooth}
+.chat-item{position:relative!important;border-bottom:1px solid rgba(84,102,112,.07)!important;padding:9px 10px!important;min-height:72px;overflow:hidden}
+.chat-item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;transition:.18s}
+.chat-item:hover::before,.chat-item.unread::before{background:linear-gradient(180deg,var(--mx-accent),var(--mx-blue))}
+.chat-item.unread{box-shadow:inset 0 0 0 1px rgba(37,211,102,.05)}
+.chat-item.selected-row{background:linear-gradient(90deg,rgba(0,168,132,.14),rgba(83,189,235,.09))!important}
+.chat-avatar.person-avatar{width:52px!important;height:52px!important;flex:0 0 52px!important;box-shadow:0 4px 16px rgba(32,44,51,.12);border:2px solid rgba(255,255,255,.8);font-weight:800!important}
+.person-avatar span{font-size:13px!important;line-height:1.05;word-break:break-all;padding:4px}
+.chat-name{letter-spacing:.1px}
+.chat-preview{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-time{font-size:10px!important}
+.unread-badge{box-shadow:0 3px 9px rgba(37,211,102,.24)}
+.chat-more-btn{opacity:.55;transition:.18s}.chat-item:hover .chat-more-btn,.chat-more-btn:focus{opacity:1}
+.main{background:rgba(239,234,226,.72)!important}
+.main-header{box-shadow:0 1px 0 rgba(84,102,112,.10);position:relative;z-index:5}
+.main-header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,var(--mx-accent),var(--mx-blue),transparent);opacity:.45}
+.message-area{position:relative;overflow:auto}
+.message-area::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.42;background-image:radial-gradient(rgba(84,102,112,.12) .7px,transparent .7px);background-size:18px 18px}
+.welcome-box{position:relative;z-index:1;animation:mxIn .35s ease both}
+.welcome-icon{box-shadow:0 15px 35px rgba(0,168,132,.18)!important;animation:mxFloat 3.5s ease-in-out infinite}
+.floating-plus{box-shadow:0 12px 28px rgba(0,168,132,.32)!important;border:3px solid rgba(255,255,255,.8)!important;transition:.2s!important}
+.floating-plus:hover{transform:translateY(-3px) scale(1.06)!important}
+.floating-plus:active{transform:scale(.94)!important}
+.modal-overlay{backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.modal{box-shadow:0 25px 80px rgba(32,44,51,.25)!important;border:1px solid rgba(255,255,255,.75)!important;animation:mxModal .22s ease both}
+.settings-item{box-shadow:0 8px 24px rgba(32,44,51,.07)!important;border:1px solid var(--mx-line)!important;transition:.2s}
+.settings-item:hover{transform:translateY(-1px);box-shadow:var(--mx-shadow)!important}
+.settings-button{transition:.2s!important}.settings-button:hover{transform:translateY(-1px);filter:brightness(1.02)}
+.folder-row{transition:.18s!important}.folder-row:hover{transform:translateX(3px);box-shadow:0 7px 20px rgba(32,44,51,.08)}
+.folder-row-open{transition:.18s!important}
+.toast{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 12px 35px rgba(32,44,51,.18)!important}
+#mxDashboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:0 12px 8px;background:inherit}
+.mx-stat{min-width:0;padding:8px 9px;border:1px solid var(--mx-line);border-radius:13px;background:rgba(255,255,255,.72);box-shadow:0 4px 12px rgba(32,44,51,.04);cursor:pointer;transition:.2s}
+.mx-stat:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(32,44,51,.08)}
+.mx-stat b{display:block;font-size:16px;line-height:1.1;color:var(--mx-ink)}
+.mx-stat span{display:block;margin-top:3px;font-size:9px;color:var(--mx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;background:var(--mx-accent)}
+#mxQuickBar{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:12020;padding:7px;border-radius:18px;background:rgba(32,44,51,.95);box-shadow:0 18px 45px rgba(32,44,51,.28);color:#fff;gap:6px;align-items:center;backdrop-filter:blur(15px)}
+#mxQuickBar button{border:0;border-radius:13px;background:#26343b;color:#fff;padding:9px 11px;font-size:12px;font-weight:700}
+#mxQuickBar button.primary{background:var(--mx-accent)}
+#mxUploadCenter{position:fixed;right:18px;bottom:18px;z-index:11900;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.mx-upload-card{width:min(330px,calc(100vw - 36px));background:rgba(255,255,255,.96);border:1px solid var(--mx-line);border-radius:17px;padding:11px 12px;box-shadow:0 18px 45px rgba(32,44,51,.17);pointer-events:auto;animation:mxIn .25s ease both}
+.mx-upload-head{display:flex;align-items:center;gap:8px}.mx-upload-number{font-weight:800;flex:1}.mx-upload-state{font-size:10px;color:var(--mx-muted)}
+.mx-upload-track{height:7px;background:#e8eef0;border-radius:9px;overflow:hidden;margin-top:8px}.mx-upload-fill{height:100%;width:0;background:linear-gradient(90deg,var(--mx-accent),var(--mx-blue),var(--mx-pink));transition:width .25s}
+.mx-upload-foot{display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:10px;color:var(--mx-muted)}
+#mxPalette{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.mx-color{width:34px;height:34px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(32,44,51,.18);cursor:pointer}.mx-color.active{outline:3px solid rgba(0,168,132,.24)}
+.mx-hero{position:relative;overflow:hidden;border-radius:20px;padding:18px;color:#fff;background:linear-gradient(135deg,#008f72,#00a884 45%,#53bdeb);box-shadow:0 14px 35px rgba(0,168,132,.22);margin-bottom:14px}
+.mx-hero::after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;right:-60px;top:-80px;background:rgba(255,255,255,.15)}
+.mx-hero h3,.mx-hero p{position:relative;z-index:1}.mx-hero h3{margin:0 0 5px;font-size:20px}.mx-hero p{margin:0;font-size:12px;opacity:.9}
+.mx-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.mx-shortcut{border:1px solid var(--mx-line);border-radius:14px;padding:11px;background:#fff;cursor:pointer;text-align:left}.mx-shortcut strong{display:block}.mx-shortcut small{color:var(--mx-muted)}
+.mx-search-hit{background:#fff0a8;border-radius:3px;padding:0 2px}
+.dark-mode #mxDashboard .mx-stat,.dark-mode .mx-upload-card,.dark-mode .mx-shortcut{background:rgba(32,44,51,.88);color:#e9edef}.dark-mode .mx-stat b{color:#e9edef}.dark-mode .mx-stat span,.dark-mode .mx-upload-state,.dark-mode .mx-upload-foot{color:#9aa8ae}.dark-mode .mx-upload-track{background:#34434a}
+@keyframes mxIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes mxModal{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes mxFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@media(max-width:900px){#mxDashboard{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){
+ #mxDashboard{padding:0 8px 7px;gap:6px}.mx-stat{padding:7px}.mx-stat b{font-size:14px}
+ .chat-item{min-height:68px!important}.chat-avatar.person-avatar{width:48px!important;height:48px!important;flex-basis:48px!important}
+ #mxUploadCenter{left:10px;right:10px;bottom:10px}.mx-upload-card{width:auto}
+ #mxQuickBar{left:8px;right:8px;transform:none;justify-content:center;flex-wrap:wrap;bottom:10px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<script id="takrir-max-engine">
+/* =========================================================
+   MAX ENGINE — кооздук + UX катмары
+========================================================= */
+(function(){
+  'use strict';
+  const MX={
+    paletteKey:'takrir_accent',
+    accentKey:'takrir_accent_name',
+    activityKey:'takrir_activity',
+    maxHistory:80
+  };
+  const $=id=>document.getElementById(id);
+  const safe=(v)=>typeof escapeHTML==='function'?escapeHTML(v):String(v??'');
+
+  function addActivity(type,number,text){
+    try{
+      const key=(currentUser?.sub||currentUser?.email||'guest');
+      const k=MX.activityKey+'_'+key;
+      const a=JSON.parse(localStorage.getItem(k)||'[]');
+      a.unshift({type,number:String(number||''),text:String(text||''),time:new Date().toISOString()});
+      localStorage.setItem(k,JSON.stringify(a.slice(0,MX.maxHistory)));
+    }catch(e){}
+  }
+  window.takrirActivity=addActivity;
+
+  const palettes={
+    green:['#00a884','#25d366'],
+    blue:['#1677ff','#53bdeb'],
+    pink:['#e83e8c','#ff6b8a'],
+    orange:['#f08c00','#ff9f43'],
+    purple:['#6f42c1','#9b7bff'],
+    red:['#dc3545','#ff6b6b']
+  };
+  function applyAccent(name,silent){
+    const p=palettes[name]||palettes.green;
+    document.documentElement.style.setProperty('--mx-accent',p[0]);
+    document.documentElement.style.setProperty('--mx-accent-2',p[1]);
+    localStorage.setItem(MX.paletteKey,p[0]);localStorage.setItem(MX.accentKey,name);
+    document.querySelectorAll('.mx-color').forEach(x=>x.classList.toggle('active',x.dataset.color===name));
+    if(!silent && typeof showToast==='function')showToast('🎨 Түс өзгөртүлдү');
+  }
+  window.setTakrirAccent=applyAccent;
+
+  function ensureDashboard(){
+    if($('mxDashboard')||!$('chatList'))return;
+    const d=document.createElement('div');d.id='mxDashboard';
+    d.innerHTML=`
+      <div class="mx-stat" data-stat="all"><b id="mxAllCount">0</b><span><i class="mx-dot"></i>Баары</span></div>
+      <div class="mx-stat" data-stat="unread"><b id="mxUnreadCount">0</b><span><i class="mx-dot" style="background:#25d366"></i>Окулбаган</span></div>
+      <div class="mx-stat" data-stat="uploads"><b id="mxUploadCount">0</b><span><i class="mx-dot" style="background:#53bdeb"></i>Жүктөлүүдө</span></div>
+      <div class="mx-stat" data-stat="full"><b id="mxFullCount">0</b><span><i class="mx-dot" style="background:#ff9f43"></i>Толук</span></div>`;
+    $('chatList').parentElement.insertBefore(d,$('chatList'));
+    d.querySelectorAll('.mx-stat').forEach(s=>s.onclick=()=>{
+      const t=s.dataset.stat;
+      if(t==='all'&&typeof setFileFilter==='function')setFileFilter('all');
+      if(t==='unread'&&typeof setFileFilter==='function')setFileFilter('unread');
+      if(t==='full'&&typeof setFileFilter==='function')setFileFilter('duplicates');
+      if(t==='uploads'&&typeof setFileFilter==='function')setFileFilter('all');
+    });
+  }
+  function updateDashboard(){
+    ensureDashboard();
+    try{
+      const files=(typeof getFiles==='function'?getFiles():[]).filter(f=>Number(f.year||takrirYear)===Number(takrirYear));
+      const bulk=(typeof getBulkNumbers==='function'?getBulkNumbers():[]);
+      const all=new Set(files.map(f=>String(f.number||'').trim()));
+      const $a=$('mxAllCount'),$u=$('mxUnreadCount'),$p=$('mxUploadCount'),$f=$('mxFullCount');
+      if($a)$a.textContent=files.length;
+      if($u)$u.textContent=files.filter(f=>f.unread).length;
+      if($p)$p.textContent=files.filter(f=>f.uploading).length;
+      if($f)$f.textContent=bulk.filter(n=>all.has(String(n).trim())).length;
+    }catch(e){}
+  }
+  window.takrirUpdateDashboard=updateDashboard;
+
+  function ensureUploadCenter(){
+    if(!$('mxUploadCenter')){
+      const x=document.createElement('div');x.id='mxUploadCenter';document.body.appendChild(x);
+    }
+  }
+  function updateUploadCenter(){
+    ensureUploadCenter();
+    const box=$('mxUploadCenter');if(!box)return;
+    let files=[];try{files=getFiles().filter(f=>f.uploading)}catch(e){return}
+    box.innerHTML=files.map(f=>{
+      const p=Math.max(0,Math.min(100,Number(f.uploadProgress||0)));
+      return `<div class="mx-upload-card"><div class="mx-upload-head"><span>🎬</span><span class="mx-upload-number">${safe(f.number)}</span><span class="mx-upload-state">${p}%</span></div><div class="mx-upload-track"><div class="mx-upload-fill" style="width:${p}%"></div></div><div class="mx-upload-foot"><span>${safe(f.name||'Видео')}</span><span>${p<100?'Жүктөлүүдө':'Даяр'}</span></div></div>`;
+    }).join('');
+  }
+  window.takrirUpdateUploadCenter=updateUploadCenter;
+
+  function decorateAvatars(){
+    document.querySelectorAll('.chat-avatar.person-avatar').forEach(el=>{
+      const text=(el.textContent||'').trim();let hash=0;for(let i=0;i<text.length;i++)hash=(hash*31+text.charCodeAt(i))>>>0;
+      const names=Object.keys(palettes);const n=names[hash%names.length];const p=palettes[n];
+      el.style.background=`linear-gradient(135deg,${p[0]},${p[1]})`;el.style.color='#fff';
+    });
+  }
+  window.takrirDecorateAvatars=decorateAvatars;
+
+  function refreshEnhancements(){
+    updateDashboard();updateUploadCenter();decorateAvatars();
+    const accent=localStorage.getItem(MX.accentKey)||'green';applyAccent(accent,true);
+  }
+
+  /* Узак басуу логикасы: бир басуу кадимки ачат, 2 секунддан кийин тандоо. */
+  let holdTimer=null,holdTriggered=false,holdId=null;
+  document.addEventListener('pointerdown',function(e){
+    const row=e.target.closest?.('.chat-item[data-file-id]');
+    if(!row||e.target.closest('.chat-more-btn'))return;
+    holdTriggered=false;holdId=row.dataset.fileId;
+    clearTimeout(holdTimer);
+    holdTimer=setTimeout(()=>{
+      holdTriggered=true;
+      if(typeof toggleSelectedFile==='function')toggleSelectedFile(holdId);
+      row.classList.add('selected-row');
+      if(navigator.vibrate)navigator.vibrate(35);
+    },2000);
+  },{passive:true});
+  document.addEventListener('pointerup',function(e){
+    if(holdTimer){clearTimeout(holdTimer);holdTimer=null}
+  },{passive:true});
+  document.addEventListener('pointercancel',function(){clearTimeout(holdTimer);holdTimer=null},{passive:true});
+
+  /* Тандоо режими башталганда калган номерлер бир басууда кошулат. */
+  document.addEventListener('click',function(e){
+    const row=e.target.closest?.('.chat-item[data-file-id]');
+    if(!row||e.target.closest('.chat-more-btn'))return;
+    const id=row.dataset.fileId;
+    if(holdTriggered){holdTriggered=false;return}
+    if(typeof selectionMode!=='undefined'&&selectionMode&&typeof toggleSelectedFile==='function'){
+      toggleSelectedFile(id);e.preventDefault();e.stopPropagation();return;
+    }
+  },true);
+
+  /* Клавиатура: Ctrl+K издөө, Ctrl+N жаңы файл, Esc жабуу. */
+  document.addEventListener('keydown',function(e){
+    if(e.ctrlKey&&e.key.toLowerCase()==='k'){
+      e.preventDefault();$('searchInput')?.focus();$('searchInput')?.select();
+    }
+    if(e.ctrlKey&&e.key.toLowerCase()==='n'){
+      e.preventDefault();typeof openNumberModal==='function'&&openNumberModal();
+    }
+    if(e.key==='Escape'){
+      ['numberModal','videoModal','settingsModal','folderPickerModal','moreMenu','yearMenu'].forEach(id=>{
+        const el=$(id);if(el&&el.style.display&&el.style.display!=='none')el.style.display='none';
+      });
+    }
+  });
+
+  /* Видео тандоо терезесинде файлды сүйрөп таштоо. */
+  document.addEventListener('dragover',function(e){
+    const modal=$('videoModal');if(modal?.style.display==='flex'){e.preventDefault();modal.classList.add('mx-drop-active')}
+  });
+  document.addEventListener('dragleave',function(e){if(!e.relatedTarget)$('videoModal')?.classList.remove('mx-drop-active')});
+  document.addEventListener('drop',function(e){
+    const modal=$('videoModal');if(modal?.style.display!=='flex')return;
+    e.preventDefault();modal.classList.remove('mx-drop-active');
+    const file=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('video/'));
+    if(!file){typeof showToast==='function'&&showToast('⚠️ Видео файл тандаңыз.');return}
+    const input=$('videoInput');if(input){const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}))}
+  });
+
+  /* Профиль меню үчүн түстөрдү настройкага кошобуз. */
+  function injectPalette(){
+    const settings=document.querySelector('#settingsModal .modal');if(!settings||$('mxPalette'))return;
+    const block=document.createElement('div');block.className='settings-item';
+    block.innerHTML=`<h3>🌈 Интерфейс түсү</h3><div class="settings-muted">Көзгө жагымдуу түстү тандаңыз.</div><div id="mxPalette">${Object.entries(palettes).map(([n,p])=>`<button class="mx-color" data-color="${n}" title="${n}" style="background:linear-gradient(135deg,${p[0]},${p[1]})" onclick="setTakrirAccent('${n}')"></button>`).join('')}</div>`;
+    const theme=settings.querySelector('.settings-item:nth-last-of-type(2)');
+    if(theme)theme.insertAdjacentElement('afterend',block);else settings.insertBefore(block,settings.lastElementChild);
+    applyAccent(localStorage.getItem(MX.accentKey)||'green',true);
+  }
+  const oldOpenSettings=window.openSettings;
+  window.openSettings=function(){
+    if(typeof oldOpenSettings==='function')oldOpenSettings();
+    setTimeout(()=>{injectPalette();refreshEnhancements()},60);
+  };
+
+  /* Toast'ту бирдей, заманбап кылып көрсөтүү. */
+  function smartToast(message){
+    if(typeof showToast==='function')showToast(message);
+  }
+  window.takrirSmartToast=smartToast;
+
+  /* renderChatList чакырылган сайын биздин катмар да жаңыланат. */
+  const oldRender=window.renderChatList;
+  if(typeof oldRender==='function'){
+    window.renderChatList=function(){
+      const r=oldRender.apply(this,arguments);
+      setTimeout(refreshEnhancements,0);
+      return r;
+    };
+  }
+
+  /* Каттоону активдүүлүк журналына кошобуз. */
+  const oldRegister=window.registerVideo;
+  if(typeof oldRegister==='function'){
+    window.registerVideo=async function(){
+      const n=selectedFileNumber;
+      addActivity('upload-start',n,'Видео жүктөлө баштады');
+      try{const r=await oldRegister.apply(this,arguments);addActivity('upload-finish',n,'Видео катталды');return r}
+      catch(e){addActivity('upload-error',n,e?.message||'Ката');throw e}
+    };
+  }
+
+  /* Катталган файл ачылганда activity. */
+  const oldOpenFile=window.openFile;
+  if(typeof oldOpenFile==='function'){
+    window.openFile=function(file){addActivity('open',file?.number||'','Файл ачылды');return oldOpenFile.apply(this,arguments)};
+  }
+
+  /* Жүктөө борборун 400ms сайын жаңыртабыз, оор иш кылбайт. */
+  setInterval(()=>{try{updateUploadCenter();updateDashboard()}catch(e){}},700);
+
+  /* PWA/мобилдик браузерге app-like metadata. */
+  const meta=document.createElement('meta');meta.name='theme-color';meta.content='#00a884';document.head.appendChild(meta);
+  const apple=document.createElement('meta');apple.name='apple-mobile-web-app-capable';apple.content='yes';document.head.appendChild(apple);
+  const status=document.createElement('meta');status.name='apple-mobile-web-app-status-bar-style';status.content='default';document.head.appendChild(status);
+
+  document.addEventListener('DOMContentLoaded',function(){
+    ensureDashboard();refreshEnhancements();
+    setTimeout(refreshEnhancements,350);
+  });
+})();
+</script>
 </body>
 </html>
