@@ -1908,11 +1908,8 @@ function ensureDriveToken(forceRefresh=false){
                         }
                     };
                 }
-
-                // Ар бир папка ачылганда жаңы/жарактуу access token алынат.
-                // prompt:"" аккаунт тандоочуну кайра ачпай, мурунку аккаунтту колдонот.
-                const needConsent=!localStorage.getItem("takrir_drive_scope_v2");
-                tokenClient.requestAccessToken({prompt:needConsent?"consent":""});
+                // Жүктөөдө эски/мөөнөтү бүткөн token колдонулбашы үчүн ар дайым жаңы access token алабыз.
+                tokenClient.requestAccessToken({prompt:forceRefresh?"consent":""});
             }catch(e){reject(e);}
         });
     });
@@ -2262,69 +2259,134 @@ async function findDriveFileByNumber(number){
 }
 
 async function uploadVideoToDrive(file,number,onProgress,personNameOverride){
-    const token=await ensureDriveToken();
+    if(!file || !file.size) throw new Error("Тандалган файл бош же окулбай жатат.");
     const folder=getSelectedFolder();
     if(!folder?.id) throw new Error("Google Drive папкасы тандалган эмес.");
+
+    // Видео чоң болсо да браузерди бир чоң PUT менен тоңдурбай, 8 MB бөлүктөргө бөлүп жүктөйбүз.
+    // 401/403 болсо access token жаңыртылып, ошол эле upload session улантылат.
+    const CHUNK_SIZE=8*1024*1024;
+    let token=await ensureDriveToken(false);
 
     const metadata={
         name:file.name,
         mimeType:file.type||"video/mp4",
-        appProperties:{takrir:"1",fileNumber:String(number),personName:String(personNameOverride ?? selectedPersonName ?? "")},
+        appProperties:{
+            takrir:"1",
+            fileNumber:String(number),
+            personName:String(personNameOverride ?? selectedPersonName ?? "")
+        },
         parents:[folder.id]
     };
 
-    const init=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,webContentLink,createdTime,parents",{
-        method:"POST",
-        headers:{
-            Authorization:"Bearer "+token,
-            "Content-Type":"application/json; charset=UTF-8",
-            "X-Upload-Content-Type":file.type||"video/mp4",
-            "X-Upload-Content-Length":String(file.size)
-        },
-        body:JSON.stringify(metadata)
-    });
-    if(!init.ok) throw new Error("Google Drive каттоону баштай алган жок: "+await init.text());
+    async function startSession(){
+        const init=await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,webContentLink,createdTime,parents",{
+            method:"POST",
+            headers:{
+                Authorization:"Bearer "+token,
+                "Content-Type":"application/json; charset=UTF-8",
+                "X-Upload-Content-Type":file.type||"video/mp4",
+                "X-Upload-Content-Length":String(file.size)
+            },
+            body:JSON.stringify(metadata)
+        });
+        if(init.status===401 || init.status===403){
+            token=await ensureDriveToken(true);
+            return startSession();
+        }
+        if(!init.ok) throw new Error("Google Drive каттоону баштай алган жок: "+await init.text());
+        const location=init.headers.get("Location");
+        if(!location) throw new Error("Google Drive upload дареги алынган жок.");
+        return location;
+    }
 
-    const location=init.headers.get("Location");
-    if(!location) throw new Error("Google Drive upload дареги алынган жок.");
+    const location=await startSession();
+    let uploaded=null;
 
-    const uploaded=await new Promise(function(resolve,reject){
-        const xhr=new XMLHttpRequest();
-        xhr.open("PUT",location,true);
-        xhr.setRequestHeader("Content-Type",file.type||"video/mp4");
-        xhr.setRequestHeader("Content-Range","bytes 0-"+(file.size-1)+"/"+file.size);
-        xhr.upload.onprogress=function(e){
-            if(e.lengthComputable && onProgress){
-                onProgress(Math.min(99,Math.round((e.loaded/e.total)*100)));
+    for(let start=0; start<file.size; ){
+        const end=Math.min(start+CHUNK_SIZE,file.size)-1;
+        const chunk=file.slice(start,end+1);
+        let attempt=0;
+
+        while(true){
+            attempt++;
+            const xhr=await new Promise(function(resolve,reject){
+                const x=new XMLHttpRequest();
+                x.open("PUT",location,true);
+                x.setRequestHeader("Authorization","Bearer "+token);
+                x.setRequestHeader("Content-Type",file.type||"video/mp4");
+                x.setRequestHeader("Content-Range","bytes "+start+"-"+end+"/"+file.size);
+                x.timeout=120000;
+                x.upload.onprogress=function(e){
+                    if(e.lengthComputable && onProgress){
+                        const percent=Math.min(99,Math.round(((start+e.loaded)/file.size)*100));
+                        onProgress(percent);
+                    }
+                };
+                x.onload=function(){resolve({status:x.status,text:x.responseText,range:x.getResponseHeader("Range")||""});};
+                x.onerror=function(){reject(new Error("Интернет же Google Drive байланышында ката кетти."));};
+                x.ontimeout=function(){reject(new Error("Google Drive жооп бербей жатат. Интернетти текшерип кайра аракет кылыңыз."));};
+                x.onabort=function(){reject(new Error("Жүктөө токтотулду."));};
+                x.send(chunk);
+            }).catch(async function(err){
+                if(attempt<3){ await new Promise(r=>setTimeout(r,1200)); return null; }
+                throw err;
+            });
+
+            if(!xhr){ continue; }
+
+            if(xhr.status===401 || xhr.status===403){
+                if(attempt>=3) throw new Error("Google Drive уруксатынын мөөнөтү бүттү. Google аккаунтка кайра уруксат бериңиз.");
+                token=await ensureDriveToken(true);
+                continue;
             }
-        };
-        xhr.onload=function(){
+
+            // 308 = Google Drive бул бөлүктү кабыл алды, кийинки byte'тан улантабыз.
+            if(xhr.status===308){
+                const m=(xhr.range||"").match(/bytes=0-(\d+)/i);
+                const next=m ? Number(m[1])+1 : end+1;
+                start=Math.max(next,end+1);
+                break;
+            }
+
             if(xhr.status>=200 && xhr.status<300){
-                try{resolve(JSON.parse(xhr.responseText));}
-                catch(e){reject(new Error("Google Drive жүктөлгөн файлдын жообу окулган жок."));}
-            }else{
-                reject(new Error("Google Drive файл жүктөөдө ката: "+(xhr.responseText||("HTTP "+xhr.status))));
+                try{uploaded=JSON.parse(xhr.text||"{}");}
+                catch(e){throw new Error("Google Drive жүктөлгөн файлдын жообу окулган жок.");}
+                start=end+1;
+                if(onProgress) onProgress(100);
+                break;
             }
-        };
-        xhr.onerror=function(){reject(new Error("Интернет же Google Drive байланышында ката кетти."));};
-        xhr.onabort=function(){reject(new Error("Жүктөө токтотулду."));};
-        xhr.send(file);
-    });
 
-    if(onProgress) onProgress(100);
+            // 5xx убактылуу ката болсо ошол chunk'ту кайра аракет кылабыз.
+            if(xhr.status>=500 && attempt<3){
+                await new Promise(r=>setTimeout(r,1500*attempt));
+                continue;
+            }
+            throw new Error("Google Drive файл жүктөөдө ката: "+(xhr.text||("HTTP "+xhr.status)));
+        }
+    }
+
+    if(!uploaded?.id) throw new Error("Google Drive файлдын ID'си алынган жок.");
+
     const id=uploaded.id;
     let url=uploaded.webViewLink||("https://drive.google.com/file/d/"+id+"/view?usp=sharing");
 
-    // Видео ачылышы үчүн жалпы көрүү уруксатын аракет кылып беребиз.
+    // Видео башка адамдарга да ачылышы үчүн жалпы көрүү уруксатын аракет кылабыз.
     try{
         const pr=await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"/permissions?sendNotificationEmail=false",{
             method:"POST",
             headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
             body:JSON.stringify({type:"anyone",role:"reader"})
         });
-        if(pr.ok){
-            url="https://drive.google.com/file/d/"+id+"/view?usp=sharing";
+        if(pr.status===401 || pr.status===403){
+            token=await ensureDriveToken(true);
+            await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"/permissions?sendNotificationEmail=false",{
+                method:"POST",
+                headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+                body:JSON.stringify({type:"anyone",role:"reader"})
+            });
         }
+        url="https://drive.google.com/file/d/"+id+"/view?usp=sharing";
     }catch(e){console.warn("Public sharing permission берилген жок",e);}
 
     return {...uploaded,id,url,folder};
