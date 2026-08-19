@@ -3032,27 +3032,130 @@ window.importBulkNumbers=function(){
   const oldSetFilter=window.setFileFilter;
   window.setFileFilter=function(f){fileFilter=f;localStorage.setItem('takrir_filter',f);renderChatList();};
 
-  // Background/resumable upload: modal closes immediately, progress stays on its row.
+  // Upload runs independently after the modal closes.
+  // The only upload indicator is the progress bar inside the file-number row.
   window.registerVideo=async function(){
-    if(!selectedFileNumber){showToast('Файл номери жок.');return;}
-    if(!selectedVideoFile){showToast(selectedMediaType==='photo'?'Сүрөт тандаңыз.':'Видео тандаңыз.');return;}
-    const folder=getSelectedFolder(); if(!folder?.id){showToast('⚠️ Алгач Настройкадан Google Drive папкасын тандаңыз.');return;}
-    const local=getFiles(); if(local.some(x=>String(x.number)===String(selectedFileNumber)&&x.type!=='pending')){showToast('⚠️ Бул файл номери буга чейин катталган.');return;}
-    const number=selectedFileNumber, file=selectedVideoFile, mediaType=selectedMediaType==='photo'?'photo':'video', personName=selectedPersonName||'', tempId='upload-'+Date.now()+'-'+Math.random().toString(36).slice(2);
-    const item={id:tempId,number,personName,name:file.name,type:mediaType,url:'',driveId:null,mimeType:file.type||(mediaType==='photo'?'image/jpeg':'video/mp4'),size:file.size,date:new Date().toLocaleString('ky-KG'),createdTime:new Date().toISOString(),folder,unread:true,year:takrirYear,uploading:true,uploadProgress:0};
-    saveFiles([item,...local]); renderChatList(); showWelcome();
-    selectedVideoFile=null;selectedFileNumber='';selectedPersonName='';document.getElementById('videoInput').value='';closeModal('videoModal');
+    const number=String(selectedFileNumber||"").trim();
+    const file=selectedVideoFile;
+    const mediaType=selectedMediaType==="photo"?"photo":"video";
+    const personName=String(selectedPersonName||"").trim();
+
+    if(!number){
+      showToast("Файл номери жок.");
+      return;
+    }
+    if(!file){
+      showToast(mediaType==="photo"?"Сүрөт тандаңыз.":"Видео тандаңыз.");
+      return;
+    }
+    if(!file.size){
+      showToast("❌ Тандалган файл бош.");
+      return;
+    }
+
+    const folder=getSelectedFolder();
+    if(!folder?.id){
+      showToast("⚠️ Алгач Настройкадан Google Drive папкасын тандаңыз.");
+      return;
+    }
+
+    const local=getFiles();
+    if(local.some(x=>String(x.number)===number && x.type!=="pending" && !x.uploading)){
+      showToast("⚠️ Бул файл номери буга чейин катталган.");
+      return;
+    }
+
+    const tempId="upload-"+Date.now()+"-"+Math.random().toString(36).slice(2);
+    const item={
+      id:tempId,
+      number:number,
+      personName,
+      name:file.name,
+      type:mediaType,
+      url:"",
+      driveId:null,
+      mimeType:file.type||(mediaType==="photo"?"image/jpeg":"video/mp4"),
+      size:file.size,
+      date:new Date().toLocaleString("ky-KG"),
+      createdTime:new Date().toISOString(),
+      folder,
+      unread:true,
+      year:takrirYear,
+      uploading:true,
+      uploadProgress:0
+    };
+
+    // Put the temporary file row into the list first so its progress is visible.
+    saveFiles([item,...local]);
+    renderChatList();
+
+    // Close the picker immediately; upload continues in the background.
+    selectedVideoFile=null;
+    selectedFileNumber="";
+    selectedPersonName="";
+    const input=document.getElementById("videoInput");
+    if(input) input.value="";
+    closeModal("videoModal");
+
     (async()=>{
       try{
-        if(!currentUser)throw new Error('Google аккаунт тандалган эмес.');
-        if(!driveAccessToken)await ensureDriveToken();
-        const dup=await findDriveFileByNumber(number);if(dup)throw new Error('Бул файл номери башка түзмөктө мурун катталган.');
-        const data=await uploadVideoToDrive(file,number,(p)=>{const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);if(ix>=0){arr[ix]={...arr[ix],uploadProgress:p};saveFiles(arr);renderChatList();}},personName);
-        const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);
-        if(ix>=0){arr[ix]={...arr[ix],id:data.id,driveId:data.id,url:data.url,driveWebViewLink:data.url,uploading:false,uploadProgress:100,type:mediaType,personName,unread:true};saveFiles(arr);renderChatList();showToast('✅ '+number+' катталды');}
+        if(!currentUser) throw new Error("Google аккаунт тандалган эмес.");
+        if(!driveAccessToken) await ensureDriveToken();
+
+        const dup=await findDriveFileByNumber(number);
+        if(dup) throw new Error("Бул файл номери башка түзмөктө мурун катталган.");
+
+        const data=await uploadVideoToDrive(
+          file,
+          number,
+          function(percent){
+            const arr=getFiles();
+            const ix=arr.findIndex(x=>String(x.id)===tempId);
+            if(ix>=0){
+              arr[ix]={...arr[ix],uploadProgress:percent,uploading:percent<100};
+              saveFiles(arr);
+              renderChatList();
+            }
+          },
+          personName
+        );
+
+        const arr=getFiles();
+        const ix=arr.findIndex(x=>String(x.id)===tempId);
+        if(ix>=0){
+          arr[ix]={
+            ...arr[ix],
+            id:data.id,
+            driveId:data.id,
+            url:data.url,
+            driveWebViewLink:data.url,
+            uploading:false,
+            uploadProgress:100,
+            type:mediaType,
+            personName,
+            unread:true
+          };
+          saveFiles(arr);
+          renderChatList();
+        }
+        showToast("✅ "+number+" ийгиликтүү катталды");
       }catch(err){
-        const arr=getFiles();const ix=arr.findIndex(x=>String(x.id)===tempId);if(ix>=0){arr[ix]={...arr[ix],uploading:false,uploadError:err.message,uploadProgress:0};saveFiles(arr);renderChatList();}
-        showToast('❌ '+(err.message||'Жүктөөдө ката кетти'));
+        console.error("Takrir upload error:",err);
+
+        const arr=getFiles();
+        const ix=arr.findIndex(x=>String(x.id)===tempId);
+        if(ix>=0){
+          arr[ix]={
+            ...arr[ix],
+            uploading:false,
+            uploadError:String(err?.message||err||"Белгисиз ката"),
+            uploadProgress:0
+          };
+          saveFiles(arr);
+          renderChatList();
+        }
+
+        showToast("❌ "+String(err?.message||err||"Жүктөөдө ката кетти"));
       }
     })();
   };
@@ -3159,7 +3262,6 @@ body::before{
 #mxQuickBar{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:12020;padding:7px;border-radius:18px;background:rgba(32,44,51,.95);box-shadow:0 18px 45px rgba(32,44,51,.28);color:#fff;gap:6px;align-items:center;backdrop-filter:blur(15px)}
 #mxQuickBar button{border:0;border-radius:13px;background:#26343b;color:#fff;padding:9px 11px;font-size:12px;font-weight:700}
 #mxQuickBar button.primary{background:var(--mx-accent)}
-#mxUploadCenter{position:fixed;right:18px;bottom:18px;z-index:11900;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .mx-upload-card{width:min(330px,calc(100vw - 36px));background:rgba(255,255,255,.96);border:1px solid var(--mx-line);border-radius:17px;padding:11px 12px;box-shadow:0 18px 45px rgba(32,44,51,.17);pointer-events:auto;animation:mxIn .25s ease both}
 .mx-upload-head{display:flex;align-items:center;gap:8px}.mx-upload-number{font-weight:800;flex:1}.mx-upload-state{font-size:10px;color:var(--mx-muted)}
 .mx-upload-track{height:7px;background:#e8eef0;border-radius:9px;overflow:hidden;margin-top:8px}.mx-upload-fill{height:100%;width:0;background:linear-gradient(90deg,var(--mx-accent),var(--mx-blue),var(--mx-pink));transition:width .25s}
@@ -3178,7 +3280,6 @@ body::before{
 @media(max-width:700px){
  #mxDashboard{padding:0 8px 7px;gap:6px}.mx-stat{padding:7px}.mx-stat b{font-size:14px}
  .chat-item{min-height:68px!important}.chat-avatar.person-avatar{width:48px!important;height:48px!important;flex-basis:48px!important}
- #mxUploadCenter{left:10px;right:10px;bottom:10px}.mx-upload-card{width:auto}
  #mxQuickBar{left:8px;right:8px;transform:none;justify-content:center;flex-wrap:wrap;bottom:10px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
@@ -3260,22 +3361,6 @@ body::before{
   }
   window.takrirUpdateDashboard=updateDashboard;
 
-  function ensureUploadCenter(){
-    if(!$('mxUploadCenter')){
-      const x=document.createElement('div');x.id='mxUploadCenter';document.body.appendChild(x);
-    }
-  }
-  function updateUploadCenter(){
-    ensureUploadCenter();
-    const box=$('mxUploadCenter');if(!box)return;
-    let files=[];try{files=getFiles().filter(f=>f.uploading)}catch(e){return}
-    box.innerHTML=files.map(f=>{
-      const p=Math.max(0,Math.min(100,Number(f.uploadProgress||0)));
-      return `<div class="mx-upload-card"><div class="mx-upload-head"><span>🎬</span><span class="mx-upload-number">${safe(f.number)}</span><span class="mx-upload-state">${p}%</span></div><div class="mx-upload-track"><div class="mx-upload-fill" style="width:${p}%"></div></div><div class="mx-upload-foot"><span>${safe(f.name||'Видео')}</span><span>${p<100?'Жүктөлүүдө':'Даяр'}</span></div></div>`;
-    }).join('');
-  }
-  window.takrirUpdateUploadCenter=updateUploadCenter;
-
   function decorateAvatars(){
     document.querySelectorAll('.chat-avatar.person-avatar').forEach(el=>{
       const text=(el.textContent||'').trim();let hash=0;for(let i=0;i<text.length;i++)hash=(hash*31+text.charCodeAt(i))>>>0;
@@ -3286,7 +3371,7 @@ body::before{
   window.takrirDecorateAvatars=decorateAvatars;
 
   function refreshEnhancements(){
-    updateDashboard();updateUploadCenter();decorateAvatars();
+    updateDashboard();decorateAvatars();
     const accent=localStorage.getItem(MX.accentKey)||'green';applyAccent(accent,true);
   }
 
@@ -3379,17 +3464,6 @@ body::before{
     };
   }
 
-  /* Каттоону активдүүлүк журналына кошобуз. */
-  const oldRegister=window.registerVideo;
-  if(typeof oldRegister==='function'){
-    window.registerVideo=async function(){
-      const n=selectedFileNumber;
-      addActivity('upload-start',n,'Видео жүктөлө баштады');
-      try{const r=await oldRegister.apply(this,arguments);addActivity('upload-finish',n,'Видео катталды');return r}
-      catch(e){addActivity('upload-error',n,e?.message||'Ката');throw e}
-    };
-  }
-
   /* Катталган файл ачылганда activity. */
   const oldOpenFile=window.openFile;
   if(typeof oldOpenFile==='function'){
@@ -3397,7 +3471,7 @@ body::before{
   }
 
   /* Жүктөө борборун 400ms сайын жаңыртабыз, оор иш кылбайт. */
-  setInterval(()=>{try{updateUploadCenter();updateDashboard()}catch(e){}},700);
+  setInterval(()=>{try{updateDashboard()}catch(e){}},700);
 
   /* PWA/мобилдик браузерге app-like metadata. */
   const meta=document.createElement('meta');meta.name='theme-color';meta.content='#00a884';document.head.appendChild(meta);
