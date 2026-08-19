@@ -1219,10 +1219,9 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
             </div>
 
             <div class="file-filters" id="fileFilters">
-                <button class="filter-btn active" data-filter="all" onclick="setFileFilter('all')">Баары</button>
-                <button class="filter-btn" data-filter="unread" onclick="setFileFilter('unread')">Окулбаган</button>
-                <button class="filter-btn" data-filter="import" onclick="setFileFilter('import')">Жүктөө</button>
-                <button class="filter-btn" data-filter="duplicates" onclick="setFileFilter('duplicates')">Толук катталгандар</button>
+                <button class="filter-btn active" data-filter="all" onclick="setFileFilter('all')">Баары <small id="filterAllCount">0</small></button>
+                <button class="filter-btn" data-filter="unread" onclick="setFileFilter('unread')">Окулбаган <small id="filterUnreadCount">0</small></button>
+                <button class="filter-btn" data-filter="import" onclick="setFileFilter('import')">Жүктөө <small id="filterImportCount">0</small></button>
             </div>
             <div id="bulkInlineAdd" class="bulk-inline-add" style="display:none">
               <textarea id="bulkInlineInput" maxlength="12000" placeholder="Файл номерлерин ушул жерге чаптаңыз (1000ге чейин)..."></textarea>
@@ -1295,13 +1294,12 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
                 </div>
 
-                <button
-                    class="circle-btn"
-                    title="Меню"
-                    onclick="toggleMoreMenu()"
-                >
-                    ⋮
-                </button>
+                <div class="main-header-actions">
+                    <button class="header-icon-btn" id="headerLinkBtn" title="Ссылка көчүрүү" onclick="copyCurrentFileLink()" style="display:none">🔗</button>
+                    <button class="header-icon-btn" id="headerQrBtn" title="QR код көчүрүү" onclick="copyCurrentFileQR()" style="display:none">▦</button>
+                    <button class="header-icon-btn" id="headerShareBtn" title="Бөлүшүү" onclick="shareCurrentFile()" style="display:none">↗</button>
+                    <button class="circle-btn" title="Меню" onclick="toggleMoreMenu()">⋮</button>
+                </div>
 
             </header>
 
@@ -1346,25 +1344,23 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
  THREE DOT MENU
 ======================================================= -->
 
-<div
-    id="moreMenu"
-    class="more-menu"
->
-
-    <button onclick="openSettings()">
-        ⚙️ Настройка
-    </button>
-
-    <button onclick="refreshFiles()">
-        🔄 Жаңыртуу
-    </button>
-
-    <button onclick="googleLogin(); closeMoreMenu();">
-        🔐 Google аккаунт менен кирүү
-    </button>
-
+<div id="moreMenu" class="more-menu">
+    <button onclick="openSettings()">⚙️ Настройка</button>
+    <button onclick="refreshFiles(); closeMoreMenu();">🔄 Жаңыртуу</button>
+    <button onclick="openAnalytics(); closeMoreMenu();">📊 Аналитика</button>
 </div>
 
+
+<!-- =======================================================
+ ANALYTICS MODAL
+======================================================= -->
+<div id="analyticsModal" class="modal-overlay" style="display:none">
+  <div class="modal large analytics-modal">
+    <h2>📊 Аналитика</h2>
+    <div id="analyticsContent"></div>
+    <div class="modal-actions"><button class="btn-cancel" onclick="closeAnalytics()">Жабуу</button></div>
+  </div>
+</div>
 
 <!-- =======================================================
  FILE NUMBER MODAL
@@ -1565,13 +1561,8 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
                         -
                     </b>
 
-                    <div
-                        id="settingsEmail"
-                        class="settings-muted"
-                    >
-                        -
-                    </div>
-
+                    <div id="settingsEmail" class="settings-muted">-</div>
+                    <div id="accountActionBox" class="account-action-box"></div>
                 </div>
 
             </div>
@@ -1701,14 +1692,16 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
     <button type="button" class="plus-media-option plus-photo" onclick="chooseMediaType('photo')" title="Сүрөт" aria-label="Сүрөт">📷</button>
     <button type="button" class="plus-media-option plus-camera" onclick="openNativeMediaCapture()" title="Камера" aria-label="Камера">📹</button>
 </div>
-<button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="togglePlusMediaChooser()">＋</button>
+<div id="floatingActions" class="floating-actions">
+  <button id="floatingPlus" class="floating-plus" title="Файл кошуу" onclick="togglePlusMediaChooser()">＋</button>
+</div>
 
 <!-- BULK FILE NUMBER IMPORT -->
 <div id="bulkImportModal" class="modal-overlay" onclick="if(event.target===this)closeBulkImport()">
   <div class="modal" style="max-width:620px;width:92%">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <h2 style="margin:0">📥 Жүктөө</h2>
-      <button type="button" class="bulk-modal-plus" onclick="openBulkAdd()">＋</button>
+      <div style="display:flex;align-items:center;gap:7px"><button type="button" id="bulkDeleteBtn" class="bulk-modal-delete" onclick="toggleBulkDeleteMode()" title="Файлдарды өчүрүү">🗑</button><button type="button" class="bulk-modal-plus" onclick="openBulkAdd()">＋</button></div>
     </div>
     <p class="settings-muted">Бул жерде алдын ала киргизилген файл номерлери турат.</p>
     <div id="bulkNumberList" class="bulk-number-list"></div>
@@ -3491,7 +3484,7 @@ body::before{
       e.preventDefault();typeof openNumberModal==='function'&&openNumberModal();
     }
     if(e.key==='Escape'){
-      ['numberModal','videoModal','settingsModal','folderPickerModal','moreMenu','yearMenu'].forEach(id=>{
+      ['numberModal','videoModal','settingsModal','folderPickerModal','moreMenu','yearMenu','analyticsModal'].forEach(id=>{
         const el=$(id);if(el&&el.style.display&&el.style.display!=='none')el.style.display='none';
       });
     }
@@ -3569,5 +3562,441 @@ document.addEventListener("click",function(e){
     }
 });
 </script>
+
+<script>
+(function(){
+  window.toggleExtraFilters=function(){
+    const fs=document.querySelectorAll('#fileFilters .extra-filter');
+    const open=document.body.classList.toggle('extra-filters-open');
+    fs.forEach(x=>x.style.display=open?'inline-flex':'none');
+    const b=document.querySelector('.filter-more-btn'); if(b)b.textContent=open?'⌃':'⌄';
+  };
+  window.copyCurrentFileLink=function(){
+    const f=(typeof getFiles==='function'?getFiles():[]).find(x=>String(x.id)===String((typeof currentFileId!=='undefined'?currentFileId:null)));
+    if(f) copyText(f.url||('https://drive.google.com/file/d/'+encodeURIComponent(f.driveId||f.id)+'/view?usp=sharing'));
+  };
+  window.copyCurrentFileQR=async function(){
+    const f=(typeof getFiles==='function'?getFiles():[]).find(x=>String(x.id)===String((typeof currentFileId!=='undefined'?currentFileId:null)));
+    if(!f)return;
+    const url=f.url||('https://drive.google.com/file/d/'+encodeURIComponent(f.driveId||f.id)+'/view?usp=sharing');
+    const qr='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='+encodeURIComponent(url);
+    if(typeof copyQR==='function') await copyQR(qr); else window.open(qr,'_blank');
+  };
+  window.openAnalytics=function(){
+    const files=(typeof getFiles==='function'?getFiles():[]).filter(f=>Number(f.year||window.takrirYear)===Number(window.takrirYear));
+    const bulk=(typeof getBulkNumbers==='function'?getBulkNumbers():[]);
+    const all=files.length, unread=files.filter(f=>f.unread).length, uploaded=files.filter(f=>f.uploading).length;
+    const full=bulk.filter(n=>files.some(f=>String(f.number).trim()===String(n).trim())).length;
+    const nums=files.map(f=>String(f.number||'')).filter(Boolean);
+    const c=document.getElementById('analyticsContent'); if(!c)return;
+    c.innerHTML=`<div class="analytics-grid">
+      <div><b>${all}</b><span>Баары</span></div>
+      <div><b>${unread}</b><span>Окулбаган</span></div>
+      <div><b>${full}</b><span>Толук катталган</span></div>
+      <div><b>${uploaded}</b><span>Жүктөлүп жаткан</span></div>
+    </div><div class="analytics-summary"><b>Файл номерлер:</b><br>${nums.length?nums.map(escapeHTML).join(', '):'Азырынча жок'}</div>`;
+    document.getElementById('analyticsModal').style.display='flex';
+  };
+  window.closeAnalytics=function(){document.getElementById('analyticsModal').style.display='none'};
+
+  const oldUpdate=window.updateUserUI;
+  if(typeof oldUpdate==='function') window.updateUserUI=function(){
+    oldUpdate();
+    const box=document.getElementById('accountActionBox');
+    if(box){
+      if(typeof currentUser!=='undefined' && currentUser){ box.innerHTML='<button type="button" class="settings-account-btn logout-btn" onclick="logoutUser();updateUserUI()">↪ Чыгуу</button>'; }
+      else { box.innerHTML='<button type="button" class="settings-account-btn" onclick="googleLogin()">＋ Кошуу</button>'; }
+    }
+  };
+
+  const oldOpenFile=window.openFile;
+  if(typeof oldOpenFile==='function') window.openFile=function(file){
+    oldOpenFile(file);
+    const l=document.getElementById('headerLinkBtn'),q=document.getElementById('headerQrBtn');
+    if(l)l.style.display='inline-flex'; if(q)q.style.display='inline-flex';
+  };
+  const oldShowWelcome=window.showWelcome;
+  if(typeof oldShowWelcome==='function') window.showWelcome=function(){
+    oldShowWelcome();
+    const l=document.getElementById('headerLinkBtn'),q=document.getElementById('headerQrBtn');
+    if(l)l.style.display='none'; if(q)q.style.display='none';
+  };
+
+  function updateFilterCounts(){
+    const files=(typeof getFiles==='function'?getFiles():[]).filter(f=>Number(f.year||window.takrirYear)===Number(window.takrirYear));
+    const bulk=(typeof getBulkNumbers==='function'?getBulkNumbers():[]);
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+    set('filterAllCount',files.length); set('filterUnreadCount',files.filter(f=>f.unread).length);
+    set('filterImportCount',bulk.length); set('filterFullCount',bulk.filter(n=>files.some(f=>String(f.number).trim()===String(n).trim())).length);
+  }
+  const oldRender=window.renderChatList;
+  if(typeof oldRender==='function') window.renderChatList=function(){oldRender();updateFilterCounts();};
+  setTimeout(()=>{updateFilterCounts();document.querySelectorAll('#fileFilters .extra-filter').forEach(x=>x.style.display='none');},100);
+})();
+</script>
+<style>
+/* WhatsApp Web-like clean 100% scale */
+html,body{zoom:1!important;transform:none!important}body{background:#d1d7db!important;color:#111b21!important}#appShell{width:100%!important;max-width:none!important;height:100vh!important} .sidebar{background:#fff!important}.sidebar-header,.main-header{background:#f0f2f5!important;border-bottom:1px solid #d1d7db!important}.search-area{background:#fff!important;padding:8px 12px!important}.search-box{background:#f0f2f5!important;border-radius:8px!important}.chat-list{background:#fff!important}.chat-item{border-bottom:1px solid #e9edef!important;background:#fff!important;border-radius:0!important}.chat-item:hover{background:#f5f6f6!important}.chat-item.unread{background:#f7fffb!important}.main{background:#efeae2!important}.message-area{background:#efeae2!important}.file-filters{background:#fff!important;padding:8px 10px!important;gap:8px!important;overflow:visible!important}.filter-btn,.filter-more-btn{border:0!important;background:#f0f2f5!important;color:#54656f!important;border-radius:20px!important;padding:9px 14px!important;font-weight:700!important}.filter-btn.active{background:#00a884!important;color:#fff!important}.filter-btn small{background:#d9fdd3!important;color:#087e4b!important}.filter-btn.active small{background:#fff!important;color:#00a884!important}.filter-more-btn{width:42px!important;padding:0!important;font-size:20px!important}.extra-filter{display:none!important}.extra-filters-open .extra-filter{display:inline-flex!important}.mx-dashboard,#mxDashboard{display:none!important}.main-header-actions{display:flex;align-items:center;gap:2px}.header-icon-btn{width:40px;height:40px;border:0;background:transparent;border-radius:50%;font-size:19px;cursor:pointer;color:#54656f;display:inline-flex;align-items:center;justify-content:center}.header-icon-btn:hover,.circle-btn:hover{background:#e9edef}.chat-more-btn{font-size:22px!important;color:#667781!important}.account-action-box{margin-top:8px}.settings-account-btn{border:0;border-radius:8px;padding:9px 15px;background:#00a884;color:#fff;font-weight:700;cursor:pointer}.logout-btn{background:#d9534f}.analytics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}.analytics-grid div{background:#f0f2f5;border-radius:10px;padding:16px;text-align:center}.analytics-grid b{display:block;font-size:28px;color:#00a884}.analytics-grid span{display:block;margin-top:5px;color:#54656f}.analytics-summary{background:#f7f8f8;border-radius:10px;padding:14px;line-height:1.7;word-break:break-word}.more-menu{background:#fff!important;border:1px solid #d1d7db!important;box-shadow:0 4px 16px rgba(0,0,0,.15)!important}.more-menu button{background:#fff!important;color:#111b21!important}.more-menu button:hover{background:#f0f2f5!important}.file-open .main-header{background:#f0f2f5!important}@media(max-width:700px){.analytics-grid{grid-template-columns:repeat(2,1fr)}.header-icon-btn{width:36px;height:36px}.filter-btn{padding:8px 11px!important}}
+</style>
+
+<script>
+/* =========================================================
+   WhatsApp 100% UI pass + 3 filters + delete mode + language
+   ========================================================= */
+(function(){
+  const I18N={
+    ky:{
+      all:'Баары', unread:'Окулбаган', upload:'Жүктөө', search:'🔎 Файл номерин издөө...', settings:'Настройка', refresh:'Жаңыртуу', analytics:'Аналитика',
+      account:'Аккаунт', add:'＋ Кошуу', logout:'↪ Чыгуу', language:'Язык', kyrgyz:'Кыргызча', russian:'Русский', close:'Жабуу',
+      driveFolder:'Google Drive папкасы', chooseFolder:'📂 Google Drive\'дан папка тандоо', openFolder:'↗️ Google Drive папканы ачуу',
+      theme:'Тема', light:'☀️ Күндүзгү', dark:'🌙 Түнкү', info:'Маалымат',
+      delete:'Өчүрүү', select:'Тандаңыз', selected:'Тандалды', cancel:'Жокко чыгаруу', noFiles:'Файл номерлери азырынча жок',
+      uploadListEmpty:'Жүктөө тизмеси бош', uploaded:'Жүктөлдү', uploading:'Жүктөлүүдө', video:'Видео', photo:'Сүрөт', copyLink:'Ссылка көчүрүү', copyQr:'QR код көчүрүү'
+    },
+    ru:{
+      all:'Все', unread:'Непрочитанные', upload:'Загрузка', search:'🔎 Поиск номера файла...', settings:'Настройки', refresh:'Обновить', analytics:'Аналитика',
+      account:'Аккаунт', add:'＋ Добавить', logout:'↪ Выйти', language:'Язык', kyrgyz:'Кыргызский', russian:'Русский', close:'Закрыть',
+      driveFolder:'Папка Google Drive', chooseFolder:'📂 Выбрать папку Google Drive', openFolder:'↗️ Открыть папку Google Drive',
+      theme:'Тема', light:'☀️ Светлая', dark:'🌙 Тёмная', info:'Информация',
+      delete:'Удалить', select:'Выберите файлы', selected:'Выбрано', cancel:'Отмена', noFiles:'Файлов пока нет',
+      uploadListEmpty:'Список загрузки пуст', uploaded:'Загружено', uploading:'Загружается', video:'Видео', photo:'Фото', copyLink:'Скопировать ссылку', copyQr:'Скопировать QR-код'
+    }
+  };
+  let lang=localStorage.getItem('takrir_lang')||'ky';
+  let deleteMode=false;
+  const t=k=>(I18N[lang]&&I18N[lang][k])||I18N.ky[k]||k;
+  window.takrirT=t;
+  window.setTakrirLanguage=function(v){lang=v==='ru'?'ru':'ky';localStorage.setItem('takrir_lang',lang);applyLanguage();showToast(lang==='ru'?'Язык изменён':'Тил өзгөртүлдү');};
+  function replaceTextNodes(root){
+    const map={
+      'Баары':'all','Окулбаган':'unread','Жүктөө':'upload','Толук катталгандар':'full','Настройка':'settings','Настройки':'settings','Жаңыртуу':'refresh','Обновить':'refresh','Аналитика':'analytics',
+      'Аккаунт':'account','＋ Кошуу':'add','↪ Чыгуу':'logout','Язык':'language','Күндүзгү':'light','Түнкү':'dark','Маалымат':'info','Жабуу':'close','Ссылка көчүрүү':'copyLink','QR код көчүрүү':'copyQr',
+      'Файл номерин издөө...':'search','Файл номерлери азырынча жок':'noFiles','Жүктөө тизмеси бош':'uploadListEmpty','Жүктөлүүдө':'uploading','Жүктөлдү':'uploaded','Видео':'video','Сүрөт':'photo'
+    };
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const nodes=[];let n;while(n=walker.nextNode())nodes.push(n);
+    nodes.forEach(node=>{let v=node.nodeValue;for(const [a,k] of Object.entries(map)){if(v.includes(a)){v=v.split(a).join(t(k));}}node.nodeValue=v;});
+  }
+  function setAttr(id,attr,key){const e=document.getElementById(id);if(e)e.setAttribute(attr,t(key));}
+  function applyLanguage(){
+    const root=document.body;replaceTextNodes(root);
+    const si=document.getElementById('searchInput');if(si)si.placeholder=t('search');
+    setAttr('headerLinkBtn','title','copyLink');setAttr('headerQrBtn','title','copyQr');
+    const f=document.querySelector('#fileFilters'); if(f){
+      const bs=f.querySelectorAll('.filter-btn');
+      if(bs[0])bs[0].childNodes[0].nodeValue=t('all')+' ';
+      if(bs[1])bs[1].childNodes[0].nodeValue=t('unread')+' ';
+      if(bs[2])bs[2].childNodes[0].nodeValue=t('upload')+' ';
+    }
+    const s=document.querySelector('#settingsModal .modal');if(s){
+      const h=s.querySelector('h2');if(h)h.textContent='⚙️ '+t('settings');
+      s.querySelectorAll('.settings-item h3').forEach(h=>{
+        const txt=h.textContent.trim();
+        if(txt.includes('Аккаунт'))h.textContent='👤 '+t('account');
+        else if(txt.includes('Google Drive'))h.textContent='📁 '+t('driveFolder');
+        else if(txt.includes('Google аккаунт'))h.textContent='🔐 Google '+t('account');
+        else if(txt.includes('Тема'))h.textContent='🎨 '+t('theme');
+        else if(txt.includes('Маалымат')||txt.includes('Информация'))h.textContent='ℹ️ '+t('info');
+        else if(txt.includes('Язык'))h.textContent='🌐 '+t('language');
+      });
+      s.querySelectorAll('.theme-btn').forEach((b,i)=>b.textContent=i===0?t('light'):t('dark'));
+      const close=s.querySelector('.btn-cancel');if(close)close.textContent=t('close');
+      const add=document.querySelector('#accountActionBox .settings-account-btn:not(.logout-btn)');if(add)add.textContent=t('add');
+      const logout=document.querySelector('#accountActionBox .logout-btn');if(logout)logout.textContent=t('logout');
+    }
+    const more=document.getElementById('moreMenu');if(more){const bs=more.querySelectorAll('button');if(bs[0])bs[0].textContent='⚙️ '+t('settings');if(bs[1])bs[1].textContent='🔄 '+t('refresh');if(bs[2])bs[2].textContent='📊 '+t('analytics');}
+    document.documentElement.lang=lang==='ru'?'ru':'ky';
+  }
+  window.startDeleteMode=function(){
+    deleteMode=true;selectionMode=true;selectedFileIds.clear();renderSelectionBar();
+    const msg=t('select');showToast(lang==='ru'?'Выберите файлы для удаления':'Өчүрө турган файлдарды тандаңыз');
+  };
+  window.cancelDeleteMode=function(){deleteMode=false;selectionMode=false;selectedFileIds.clear();document.getElementById('selectionBar')?.remove();renderChatList();};
+  const oldToggle=window.toggleSelectedFile;
+  window.toggleSelectedFile=function(id){ if(typeof oldToggle==='function')oldToggle(id); if(deleteMode)renderSelectionBar(); };
+  const oldRenderSelectionBar=window.renderSelectionBar;
+  window.renderSelectionBar=function(){
+    if(!deleteMode){if(typeof oldRenderSelectionBar==='function')oldRenderSelectionBar();return;}
+    let bar=document.getElementById('selectionBar');
+    if(!selectedFileIds.size){if(bar)bar.remove();return;}
+    if(!bar){bar=document.createElement('div');bar.id='selectionBar';bar.className='selection-bar';document.body.appendChild(bar);}
+    bar.innerHTML=`<span>${t('selected')}: ${selectedFileIds.size}</span><button onclick="deleteSelectedFiles()">🗑 ${t('delete')}</button><button onclick="cancelDeleteMode()">✕</button>`;
+  };
+  const oldClick=window.handleChatClick;
+  window.handleChatClick=function(e,id){
+    if(deleteMode){e?.preventDefault?.();toggleSelectedFile(id);return;}
+    if(typeof oldClick==='function')return oldClick(e,id);
+    const f=getFiles().find(x=>String(x.id)===String(id));if(f)openFile(f);
+  };
+  // Ensure 3 filters only and no duplicate/arrow.
+  function cleanFilters(){
+    const f=document.getElementById('fileFilters');if(!f)return;
+    f.querySelectorAll('.filter-more-btn,.filter-btn[data-filter="duplicates"]').forEach(x=>x.remove());
+    f.querySelectorAll('.filter-btn').forEach((b,i)=>{if(i>2)b.remove();});
+    const bs=f.querySelectorAll('.filter-btn');
+    if(bs[0])bs[0].dataset.filter='all'; if(bs[1])bs[1].dataset.filter='unread'; if(bs[2]){bs[2].dataset.filter='import';bs[2].classList.remove('extra-filter');}
+  }
+  function addLanguageSetting(){
+    const settings=document.querySelector('#settingsModal .modal');if(!settings||document.getElementById('takrirLanguageItem'))return;
+    const block=document.createElement('div');block.id='takrirLanguageItem';block.className='settings-item';
+    block.innerHTML=`<h3>🌐 ${t('language')}</h3><div class="settings-muted">${lang==='ru'?'Выберите язык интерфейса.':'Сайттын тилин тандаңыз.'}</div><div class="language-buttons"><button type="button" class="settings-button" onclick="setTakrirLanguage('ky')">🇰🇬 Кыргызча</button><button type="button" class="settings-button" onclick="setTakrirLanguage('ru')">🇷🇺 Русский</button></div>`;
+    const theme=[...settings.querySelectorAll('.settings-item')].find(x=>x.textContent.includes('Тема')||x.textContent.includes('Тема'));
+    if(theme)theme.insertAdjacentElement('beforebegin',block);else settings.insertBefore(block,settings.lastElementChild);
+  }
+  function ensureTrash(){
+    if(!document.getElementById('floatingActions'))return;
+    const plus=document.getElementById('floatingPlus');if(plus)plus.style.display='flex';
+    const del=document.getElementById('floatingDelete');if(del)del.style.display='flex';
+  }
+  const oldOpenSettings=window.openSettings;
+  window.openSettings=function(){if(typeof oldOpenSettings==='function')oldOpenSettings();setTimeout(()=>{addLanguageSetting();applyLanguage();},80);};
+  const oldRender=window.renderChatList;
+  if(typeof oldRender==='function')window.renderChatList=function(){const r=oldRender.apply(this,arguments);setTimeout(()=>{cleanFilters();applyLanguage();ensureTrash();},0);return r;};
+  document.addEventListener('DOMContentLoaded',()=>{cleanFilters();addLanguageSetting();applyLanguage();ensureTrash();setTimeout(()=>{cleanFilters();applyLanguage();ensureTrash();},300);});
+  setInterval(()=>{try{cleanFilters();ensureTrash();}catch(e){}},1000);
+})();
+</script>
+<style>
+/* Final WhatsApp-like visual pass */
+html,body{zoom:1!important;transform:none!important;width:100%!important;height:100%!important;overflow:hidden!important}
+body{background:#d1d7db!important;color:#111b21!important;font-family:Arial,Helvetica,sans-serif!important}
+#appShell{width:100%!important;height:100vh!important;max-width:none!important}
+.sidebar{background:#fff!important;border-right:1px solid #d1d7db!important}
+.sidebar-header,.main-header{background:#f0f2f5!important;border-bottom:1px solid #d1d7db!important}
+.search-area{background:#fff!important;padding:7px 12px!important}
+.search-box{background:#f0f2f5!important;border-radius:8px!important;height:38px!important}
+.file-filters{background:#fff!important;padding:7px 10px!important;gap:8px!important;overflow:hidden!important;border-bottom:1px solid #e9edef!important}
+.filter-btn{background:#f0f2f5!important;color:#54656f!important;border:0!important;border-radius:18px!important;padding:8px 14px!important;font-size:13px!important;font-weight:600!important;box-shadow:none!important;transform:none!important}
+.filter-btn.active{background:#00a884!important;color:#fff!important}
+.filter-btn small{background:#d9fdd3!important;color:#087e4b!important;border-radius:10px!important;padding:2px 6px!important}
+.filter-btn.active small{background:#fff!important;color:#00a884!important}
+.chat-list{background:#fff!important}
+.chat-item{background:#fff!important;border-bottom:1px solid #e9edef!important;border-radius:0!important}
+.chat-item:hover{background:#f5f6f6!important}
+.chat-item.unread{background:#f7fffb!important}
+.main{background:#efeae2!important}.message-area{background:#efeae2!important}
+.main-header-actions{gap:0!important}.header-icon-btn{width:38px!important;height:38px!important;border-radius:50%!important;font-size:18px!important;color:#54656f!important}
+.circle-btn{width:38px!important;height:38px!important}
+.floating-actions{position:fixed!important;right:20px!important;bottom:20px!important;z-index:12000!important;display:flex!important;gap:8px!important;align-items:center!important}
+.floating-actions button{width:48px!important;height:48px!important;border-radius:50%!important;border:0!important;box-shadow:0 3px 10px rgba(0,0,0,.20)!important;display:flex!important;align-items:center!important;justify-content:center!important;cursor:pointer!important}
+#floatingPlus{position:static!important;margin:0!important;background:#00a884!important;color:#fff!important;font-size:30px!important}
+#floatingDelete{background:#fff!important;color:#54656f!important;font-size:19px!important}
+#floatingDelete:hover{background:#f0f2f5!important}
+.selection-bar{background:#202c33!important;border-radius:24px!important;padding:8px 12px!important}
+.selection-bar button{background:#00a884!important}.selection-bar button:last-child{background:#54656f!important}
+.settings-button{background:#00a884!important;color:#fff!important;border:0!important;border-radius:8px!important}
+.language-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.language-buttons .settings-button{flex:1;min-width:130px}
+.analytics-grid{grid-template-columns:repeat(3,1fr)!important}
+.more-menu{min-width:180px!important;border-radius:8px!important}
+@media(max-width:700px){.floating-actions{right:14px!important;bottom:14px!important}.floating-actions button{width:46px!important;height:46px!important}.analytics-grid{grid-template-columns:repeat(2,1fr)!important}}
+</style>
+
+
+<script>
+/* ===== FINAL UI PATCH: WhatsApp-clean file view, upload delete, language/theme icons ===== */
+(function(){
+  const $=id=>document.getElementById(id);
+
+  /* 1) Upload page: delete icon lives beside +, not in file list. */
+  let bulkDeleteMode=false;
+  let bulkSelected=new Set();
+  window.toggleBulkDeleteMode=function(){
+    bulkDeleteMode=!bulkDeleteMode;
+    bulkSelected.clear();
+    renderBulkDeleteState();
+    renderBulkList();
+  };
+  function renderBulkDeleteState(){
+    const b=$('bulkDeleteBtn'); if(!b)return;
+    b.textContent=bulkDeleteMode?'✓':'🗑';
+    b.title=bulkDeleteMode?(window.takrirT?window.takrirT('delete'):'Өчүрүү'):'Файлдарды өчүрүү';
+    b.classList.toggle('active-delete',bulkDeleteMode);
+  }
+  const oldRenderBulkList=window.renderBulkList;
+  window.renderBulkList=function(){
+    if(typeof oldRenderBulkList==='function') oldRenderBulkList();
+    const box=$('bulkNumberList'); if(!box)return;
+    if(!bulkDeleteMode)return;
+    const nums=typeof getBulkNumbers==='function'?getBulkNumbers():[];
+    if(!nums.length)return;
+    box.innerHTML=nums.map((n,i)=>{
+      const k=String(n),sel=bulkSelected.has(k);
+      return `<div class="bulk-list-row bulk-delete-row ${sel?'bulk-picked':''}" data-bulk-number="${escapeAttr(k)}" onclick="toggleBulkNumberDelete('${escapeAttr(k)}')"><span class="bulk-check">${sel?'✓':'○'}</span><span>${escapeHTML(k)}</span></div>`;
+    }).join('');
+  };
+  window.toggleBulkNumberDelete=function(n){
+    const k=String(n); if(bulkSelected.has(k))bulkSelected.delete(k);else bulkSelected.add(k);
+    renderBulkList();
+  };
+  const oldImport=window.importBulkNumbers;
+  window.importBulkNumbers=function(){
+    if(bulkDeleteMode){
+      if(!bulkSelected.size){showToast((window.takrirT?window.takrirT('select'):'Файлдарды тандаңыз'));return;}
+      const nums=(typeof getBulkNumbers==='function'?getBulkNumbers():[]).filter(n=>!bulkSelected.has(String(n)));
+      if(typeof saveBulkNumbers==='function')saveBulkNumbers(nums);
+      bulkSelected.clear(); bulkDeleteMode=false; renderBulkDeleteState(); renderBulkList();
+      if(typeof renderChatList==='function')renderChatList();
+      showToast('✅ Өчүрүлдү');
+      return;
+    }
+    if(typeof oldImport==='function')return oldImport.apply(this,arguments);
+  };
+  /* In delete mode, clicking the same trash icon deletes selected numbers. */
+  const bulkBtn=$('bulkDeleteBtn');
+  if(bulkBtn){
+    bulkBtn.onclick=function(){
+      if(!bulkDeleteMode){bulkDeleteMode=true;bulkSelected.clear();renderBulkDeleteState();renderBulkList();showToast('Файлдарды тандаңыз');}
+      else{
+        if(!bulkSelected.size){showToast('Файлдарды тандаңыз');return;}
+        const nums=(typeof getBulkNumbers==='function'?getBulkNumbers():[]).filter(n=>!bulkSelected.has(String(n)));
+        if(typeof saveBulkNumbers==='function')saveBulkNumbers(nums);
+        bulkSelected.clear();bulkDeleteMode=false;renderBulkDeleteState();renderBulkList();
+        if(typeof renderChatList==='function')renderChatList();
+        showToast('✅ Тандалган файл номерлер өчүрүлдү');
+      }
+    };
+  }
+
+  /* 2) Analytics: no "uploading" statistic. */
+  window.openAnalytics=function(){
+    const files=(typeof getFiles==='function'?getFiles():[]).filter(f=>Number(f.year||window.takrirYear)===Number(window.takrirYear));
+    const bulk=(typeof getBulkNumbers==='function'?getBulkNumbers():[]);
+    const all=files.length, unread=files.filter(f=>f.unread).length;
+    const full=bulk.filter(n=>files.some(f=>String(f.number).trim()===String(n).trim())).length;
+    const nums=files.map(f=>String(f.number||'')).filter(Boolean);
+    const c=$('analyticsContent');if(!c)return;
+    const ru=document.documentElement.lang==='ru';
+    c.innerHTML=`<div class="analytics-grid analytics-grid-clean">
+      <div><b>${all}</b><span>${ru?'Все':'Баары'}</span></div>
+      <div><b>${unread}</b><span>${ru?'Непрочитанные':'Окулбаган'}</span></div>
+      <div><b>${full}</b><span>${ru?'Полностью зарегистрированы':'Толук катталгандар'}</span></div>
+    </div><div class="analytics-summary"><b>${ru?'Номера файлов:':'Файл номерлер:'}</b><br>${nums.length?nums.map(escapeHTML).join(', '):(ru?'Пока нет':'Азырынча жок')}</div>`;
+    $('analyticsModal').style.display='flex';
+  };
+
+  /* 3) Settings: language/theme are icon-only controls with popovers. */
+  function ensureSettingsIcons(){
+    const modal=document.querySelector('#settingsModal .modal'); if(!modal)return;
+    let row=$('settingsQuickIcons');
+    if(!row){
+      row=document.createElement('div');row.id='settingsQuickIcons';row.className='settings-quick-icons';
+      row.innerHTML=`
+        <div class="quick-setting-wrap"><button class="quick-setting-icon" id="languageIconBtn" title="Язык">🌐</button><div class="quick-popover" id="languagePopover"><button onclick="setTakrirLanguage('ky')">KG</button><button onclick="setTakrirLanguage('ru')">RU</button></div></div>
+        <div class="quick-setting-wrap"><button class="quick-setting-icon" id="themeIconBtn" title="Тема">☀️</button><div class="quick-popover" id="themePopover"><button onclick="setTheme('light')">☀️</button><button onclick="setTheme('dark')">🌙</button></div></div>`;
+      const account=modal.querySelector('.settings-item');
+      if(account)account.insertAdjacentElement('afterend',row);else modal.insertBefore(row,modal.firstChild);
+      $('languageIconBtn').onclick=()=>togglePopover('languagePopover');
+      $('themeIconBtn').onclick=()=>togglePopover('themePopover');
+    }
+    modal.querySelectorAll('#takrirLanguageItem,.theme-switcher').forEach(x=>x.style.display='none');
+    const oldGoogle=modal.querySelector('.settings-item h3');
+    // Keep the existing account/Drive settings; only hide the redundant Google-account block.
+    modal.querySelectorAll('.settings-item').forEach(item=>{
+      if((item.textContent||'').includes('Google аккаунт')) item.style.display='none';
+    });
+    updateQuickThemeIcon();
+  }
+  function togglePopover(id){
+    document.querySelectorAll('.quick-popover').forEach(p=>{if(p.id!==id)p.classList.remove('show');});
+    $(id)?.classList.toggle('show');
+  }
+  function updateQuickThemeIcon(){
+    const b=$('themeIconBtn');if(!b)return;
+    const dark=document.body.classList.contains('dark-mode')||localStorage.getItem('takrir_theme')==='dark';
+    b.textContent=dark?'🌙':'☀️';
+  }
+  const oldSetTheme=window.setTheme;
+  window.setTheme=function(theme,silent){
+    if(typeof oldSetTheme==='function')oldSetTheme(theme,silent);
+    setTimeout(updateQuickThemeIcon,30);
+    document.querySelectorAll('.quick-popover').forEach(p=>p.classList.remove('show'));
+  };
+  const oldOpenSettings=window.openSettings;
+  window.openSettings=function(){if(typeof oldOpenSettings==='function')oldOpenSettings();setTimeout(ensureSettingsIcons,60);};
+
+  /* 4) File detail: clean layout. Media first, QR underneath, three copy/share icons on top. */
+  window.shareCurrentFile=function(){
+    const f=(typeof getFiles==='function'?getFiles():[]).find(x=>String(x.id)===String(window.currentFileId||currentFileId));
+    if(!f)return;
+    const url=f.url||('https://drive.google.com/file/d/'+encodeURIComponent(f.driveId||f.id)+'/view?usp=sharing');
+    shareLink(url);
+  };
+  function refreshFileHeader(){
+    const l=$('headerLinkBtn'),q=$('headerQrBtn'),s=$('headerShareBtn');
+    const open=$('appShell')?.classList.contains('file-open');
+    [l,q,s].forEach(x=>{if(x)x.style.display=open?'inline-flex':'none';});
+  }
+  const oldOpenFile=window.openFile;
+  window.openFile=function(file){
+    if(typeof oldOpenFile==='function')oldOpenFile(file);
+    setTimeout(()=>{
+      refreshFileHeader();
+      const area=$('messageArea');if(!area)return;
+      const f=(typeof getFiles==='function'?getFiles():[]).find(x=>String(x.id)===String(file?.id||window.currentFileId));if(!f)return;
+      const id=f.driveId||f.id;
+      const shareUrl=f.url||('https://drive.google.com/file/d/'+encodeURIComponent(id)+'/view?usp=sharing');
+      const videoUrl='https://drive.google.com/file/d/'+encodeURIComponent(id)+'/preview';
+      const qrURL='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='+encodeURIComponent(shareUrl);
+      const media=String(f.type)==='photo'||String(f.mimeType||'').startsWith('image/')
+        ? `<div class="clean-media photo-view"><img src="${escapeAttr(shareUrl)}" alt="${escapeAttr(f.number||'Сүрөт')}" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=\'media-fallback\'>📷 Сүрөттү Google Driveдан ачыңыз</div>'"></div>`
+        : `<div class="clean-media"><iframe src="${videoUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`;
+      area.innerHTML=`<div class="clean-file-view">
+        <div class="clean-file-top-actions">
+          <button title="QR код көчүрүү" onclick="copyCurrentFileQR()">▦</button>
+          <button title="Ссылка көчүрүү" onclick="copyCurrentFileLink()">🔗</button>
+          <button title="Бөлүшүү" onclick="shareCurrentFile()">↗</button>
+        </div>
+        <div class="clean-file-number">${escapeHTML(f.number||'')}${f.personName?` <span>— ${escapeHTML(f.personName)}</span>`:''}</div>
+        ${media}
+        <div class="clean-qr"><img src="${qrURL}" alt="QR код"></div>
+      </div>`;
+    },20);
+  };
+  const oldShowWelcome=window.showWelcome;
+  window.showWelcome=function(){if(typeof oldShowWelcome==='function')oldShowWelcome();setTimeout(refreshFileHeader,20);};
+
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('.quick-setting-wrap'))document.querySelectorAll('.quick-popover').forEach(p=>p.classList.remove('show'));
+  });
+  document.addEventListener('DOMContentLoaded',()=>{setTimeout(ensureSettingsIcons,100);refreshFileHeader();renderBulkDeleteState();});
+})();
+</script>
+<style>
+/* ===== requested final visual corrections ===== */
+#floatingDelete{display:none!important}
+.floating-actions{right:20px!important;bottom:20px!important}
+#floatingPlus{position:static!important;margin:0!important}
+.bulk-modal-delete{width:38px;height:38px;border:0;border-radius:50%;background:#f0f2f5;color:#54656f;font-size:18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.bulk-modal-delete.active-delete{background:#00a884;color:#fff}
+.bulk-delete-row{cursor:pointer;gap:10px;align-items:center}
+.bulk-delete-row.bulk-picked{background:#d9fdd3!important}
+.bulk-check{width:20px;text-align:center;color:#00a884;font-weight:800}
+.analytics-grid-clean{grid-template-columns:repeat(3,1fr)!important}
+.analytics-grid-clean div{padding:14px!important}
+.settings-quick-icons{display:flex;gap:10px;align-items:center;padding:10px 0 14px}
+.quick-setting-wrap{position:relative}
+.quick-setting-icon{width:44px;height:44px;border:1px solid #d9e1e5;border-radius:50%;background:#f0f2f5;cursor:pointer;font-size:21px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.quick-setting-icon:hover{background:#e2e6e8}
+.quick-popover{position:absolute;left:0;top:50px;display:none;z-index:5000;background:#fff;border:1px solid #d9e1e5;border-radius:14px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.16);gap:5px}
+.quick-popover.show{display:flex}
+.quick-popover button{border:0;background:#f0f2f5;border-radius:10px;padding:8px 13px;font-weight:800;cursor:pointer;color:#111b21}
+.quick-popover button:hover{background:#d9fdd3;color:#087e4b}
+.clean-file-view{width:min(760px,94%);margin:0 auto;padding:18px 18px 40px;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.clean-file-top-actions{width:100%;display:flex;justify-content:flex-end;gap:4px}
+.clean-file-top-actions button{width:40px;height:40px;border:0;border-radius:50%;background:#fff;color:#54656f;font-size:18px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.10)}
+.clean-file-top-actions button:hover{background:#e9edef}
+.clean-file-number{font-size:24px;font-weight:700;color:#111b21;padding:0 4px}
+.clean-file-number span{font-size:15px;color:#667781;font-weight:500}
+.clean-media{width:100%;max-width:720px;aspect-ratio:16/9;background:#111;border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.clean-media iframe{width:100%;height:100%;border:0}
+.clean-media img{width:100%;height:100%;object-fit:contain;background:#111;display:block}
+.media-fallback{height:100%;display:flex;align-items:center;justify-content:center;color:#fff;padding:20px;text-align:center}
+.clean-qr{width:180px;height:180px;background:#fff;border-radius:10px;padding:8px;box-sizing:border-box;box-shadow:0 1px 3px rgba(0,0,0,.12);align-self:flex-start}
+.clean-qr img{width:100%;height:100%;display:block}
+.clean-file-view .info-block,.clean-file-view .link-box,.clean-file-view .delete-row{display:none!important}
+#headerShareBtn{display:none}
+@media(max-width:700px){.clean-file-view{width:100%;padding:12px 10px 30px}.clean-file-number{font-size:21px}.clean-qr{width:150px;height:150px}.floating-actions{right:14px!important;bottom:14px!important}}
+</style>
+
 </body>
 </html>
