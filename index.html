@@ -1872,9 +1872,8 @@ function getSelectedFolder(){
 }
 function saveSelectedFolder(folder){localStorage.setItem(folderStorageKey(),JSON.stringify(folder));}
 
-function ensureDriveToken(){
+function ensureDriveToken(forceRefresh=false){
     return new Promise(function(resolve,reject){
-        if(driveAccessToken){resolve(driveAccessToken);return;}
         if(!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")){
             reject(new Error("GOOGLE_CLIENT_ID толтурулган эмес."));
             return;
@@ -1892,7 +1891,8 @@ function ensureDriveToken(){
                                 localStorage.setItem("takrir_drive_scope_v2","1");
                                 resolve(driveAccessToken);
                             }else{
-                                reject(new Error("Google Drive уруксаты алынган жок."));
+                                driveAccessToken=null;
+                                reject(new Error(response?.error_description||response?.error||"Google Drive уруксаты алынган жок."));
                             }
                         }
                     });
@@ -1902,18 +1902,21 @@ function ensureDriveToken(){
                             driveAccessToken=response.access_token;
                             localStorage.setItem("takrir_drive_scope_v2","1");
                             resolve(driveAccessToken);
-                        }else reject(new Error("Google Drive уруксаты алынган жок."));
+                        }else{
+                            driveAccessToken=null;
+                            reject(new Error(response?.error_description||response?.error||"Google Drive уруксаты алынган жок."));
+                        }
                     };
                 }
-                // Биринчи жолу жаңы Drive scope үчүн уруксат сурайт.
-                // Ошол эле аккаунт колдонулат, башка аккаунт тандагыч ачылбайт.
+
+                // Ар бир папка ачылганда жаңы/жарактуу access token алынат.
+                // prompt:"" аккаунт тандоочуну кайра ачпай, мурунку аккаунтту колдонот.
                 const needConsent=!localStorage.getItem("takrir_drive_scope_v2");
                 tokenClient.requestAccessToken({prompt:needConsent?"consent":""});
             }catch(e){reject(e);}
         });
     });
 }
-
 function savePageState(page){sessionStorage.setItem("takrir_current_page",page);}
 function restorePage(){
     const id=sessionStorage.getItem("takrir_current_file");
@@ -2618,11 +2621,18 @@ async function selectDriveFolder(){
         return;
     }
     try{
-        await ensureDriveToken();
-        openFolderPicker();
+        const token=await ensureDriveToken(false);
+        await openFolderPicker(null,"My Drive",true,token);
     }catch(e){
         console.error(e);
-        showToast("❌ Google Drive уруксаты алынган жок. Ошол эле аккаунт үчүн Drive уруксатын бериңиз.");
+        driveAccessToken=null;
+        try{
+            const token=await ensureDriveToken(true);
+            await openFolderPicker(null,"My Drive",true,token);
+        }catch(e2){
+            console.error(e2);
+            showToast("❌ Google Drive уруксаты жаңыртылган жок. Google аккаунт менен кайра уруксат бериңиз.");
+        }
     }
 }
 
@@ -2635,10 +2645,10 @@ async function loadGooglePicker(token){
 window.takrirFolderPath=[];
 window.takrirFolderCache={};
 
-async function openFolderPicker(folderId=null,folderName="My Drive",pushPath=true){
+async function openFolderPicker(folderId=null,folderName="My Drive",pushPath=true,providedToken=null){
     if(!currentUser){showToast("🔐 Алгач Google аккаунтту тандаңыз.");return;}
     try{
-        const token=await ensureDriveToken();
+        const token=providedToken || await ensureDriveToken(false);
         document.getElementById("folderPickerModal").style.display="flex";
         document.getElementById("driveFolderSearch").value="";
         if(pushPath){
@@ -2662,7 +2672,12 @@ async function openFolderPicker(folderId=null,folderName="My Drive",pushPath=tru
         }
         const url="https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+
             "&spaces=drive&pageSize=1000&orderBy=name_natural&includeItemsFromAllDrives=true&supportsAllDrives=true&fields=files(id,name,parents,mimeType,driveId),nextPageToken";
-        const r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+        let r=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+        if(r.status===401){
+            driveAccessToken=null;
+            const freshToken=await ensureDriveToken(true);
+            r=await fetch(url,{headers:{Authorization:"Bearer "+freshToken}});
+        }
         if(!r.ok){
             const text=await r.text();
             throw new Error("Drive папкаларын алуу мүмкүн болгон жок: "+text);
