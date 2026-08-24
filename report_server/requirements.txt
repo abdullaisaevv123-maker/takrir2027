@@ -1,0 +1,6 @@
+Flask>=3.0,<4
+gunicorn>=22,<24
+reportlab>=4.0,<5
+Pillow>=10,<12
+arabic-reshaper>=3.0,<4
+python-bidi>=0.4,<1
