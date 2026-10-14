@@ -1165,7 +1165,7 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
 
             <div class="sidebar-header">
 
-                <div class="profile" onclick="document.getElementById('profileImageInput')?.click()" title="Профиль сүрөтүн өзгөртүү">
+                <div class="profile" title="Google аккаунтунун сүрөтү">
 
                     <img
                         id="userAvatar"
@@ -1173,7 +1173,7 @@ body.dark-mode .file-card{background:#202c33;color:#e9edef}
                         src=""
                         alt="avatar"
                     >
-                    <input id="profileImageInput" type="file" accept="image/*" style="display:none" onchange="changeProfileImage(event)">
+                    
 
                     <div class="profile-info">
 
@@ -1956,6 +1956,18 @@ function closePlusMediaChooser(){
 function chooseMediaType(type){
     selectedMediaType=(type==="photo")?"photo":"video";
     closePlusMediaChooser();
+    if(!window.takrirActiveCurator){
+        showToast('Адегенде кураторду тандаңыз.');
+        const manager=document.getElementById('curatorManager');if(manager)manager.style.display='block';
+        return;
+    }
+    const curatorFolderKey='takrir_folder_'+(currentUser?.sub||currentUser?.email||'guest')+'_curator_'+encodeURIComponent(window.takrirActiveCurator||'');
+    let curatorFolder=null;try{curatorFolder=JSON.parse(localStorage.getItem(curatorFolderKey)||'null')}catch(e){}
+    if(!curatorFolder?.id){
+        showToast('«'+window.takrirActiveCurator+'» үчүн папка тандаңыз.');
+        openSettings();
+        return;
+    }
 
     const title=document.getElementById("mediaPickerTitle");
     const hint=document.getElementById("mediaPickerHint");
@@ -2594,8 +2606,7 @@ function applyProfileImage(data){
     if(settingsAvatar) settingsAvatar.src=data||'';
 }
 function loadProfileImage(){
-    const key='takrir_profile_image_'+(currentUser?.email||'default');
-    applyProfileImage(localStorage.getItem(key)||'');
+    applyProfileImage(currentUser?.picture||createAvatar('Такрир'));
 }
 
 function showWelcome(){
@@ -2956,7 +2967,17 @@ document.addEventListener("DOMContentLoaded",async function(){
 <script>
 let takrirYear=Number(localStorage.getItem('takrir_year')||2027);let fileFilter=localStorage.getItem('takrir_filter')||'all';
 function toggleYearMenu(){const m=document.getElementById('yearMenu');if(m)m.style.display=m.style.display==='none'?'block':'none'}
-function selectTakrirYear(y){takrirYear=Number(y);localStorage.setItem('takrir_year',String(y));const m=document.getElementById('yearMenu');if(m)m.style.display='none';const e=document.getElementById('userYear');if(e)e.textContent=String(y);fileFilter='all';localStorage.setItem('takrir_filter','all');renderChatList()}
+function selectTakrirYear(y){
+ takrirYear=Number(y);localStorage.setItem('takrir_year',String(y));
+ const userKey=(currentUser?.sub||currentUser?.email||'guest');
+ const curator=window.takrirActiveCurator||'all';
+ localStorage.setItem('takrir_year_'+userKey+'_curator_'+encodeURIComponent(curator),String(y));
+ const m=document.getElementById('yearMenu');if(m)m.style.display='none';
+ const e=document.getElementById('userYear');if(e)e.textContent=String(y);
+ fileFilter='all';localStorage.setItem('takrir_filter','all');
+ document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter==='all'));
+ renderChatList();
+}
 function setFileFilter(f){fileFilter=f;localStorage.setItem('takrir_filter',f);document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderChatList()}
 function getDisplayFiles(){
  let files=getFiles();
@@ -4005,7 +4026,10 @@ body{background:#d1d7db!important;color:#111b21!important;font-family:Arial,Helv
 #curatorControls{display:flex;align-items:center;gap:4px;max-width:180px}
 #curatorSelect{max-width:112px;border:1px solid #d5dadd;border-radius:7px;background:#fff;padding:5px 6px;font-size:12px;color:#263238}
 #addCuratorBtn{width:27px;height:27px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:19px;line-height:1}
-#curatorManager{display:none;position:absolute;top:66px;left:12px;z-index:6000;background:#fff;border:1px solid #d9e1e5;border-radius:12px;padding:14px;width:min(300px,90vw);box-shadow:0 8px 28px #0002}
+#curatorManager{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25000;background:#fff;border:1px solid #d9e1e5;border-radius:16px;padding:18px;width:min(360px,92vw);max-height:80vh;overflow:auto;box-shadow:0 18px 70px #0005}
+#curatorManager:before{content:"";position:fixed;inset:-100vh -100vw;z-index:-1;background:rgba(0,0,0,.38);pointer-events:none}
+#curatorManager #curatorRows{max-height:38vh;overflow:auto}
+#curatorManager input{margin-top:12px}
 #curatorManager input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
 #curatorManager .curator-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 2px;border-bottom:1px solid #eee}
 #curatorManager .curator-row button{border:0;border-radius:7px;padding:5px 8px;background:#f0f2f5}
@@ -4043,9 +4067,19 @@ body.dark-mode #sidebarPlusDock{background:#202c33;border-color:#33434d}
   window.takrirSetActiveCurator=function(name){
     window.takrirActiveCurator=String(name||'');
     localStorage.setItem(activeCuratorKey(),window.takrirActiveCurator);
+    const yearKey='takrir_year_'+(currentUser?.sub||currentUser?.email||'guest')+'_curator_'+encodeURIComponent(window.takrirActiveCurator||'all');
+    const savedYear=Number(localStorage.getItem(yearKey)||2027);
+    if(typeof takrirYear!=='undefined')takrirYear=savedYear;
+    localStorage.setItem('takrir_year',String(savedYear));
+    const yearEl=$('userYear');if(yearEl)yearEl.textContent=String(savedYear);
+    if(typeof fileFilter!=='undefined')fileFilter='all';
+    localStorage.setItem('takrir_filter','all');
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter==='all'));
     renderCuratorSelect();
     if(typeof renderChatList==='function')renderChatList();
     if(typeof updateDriveFolderBox==='function')updateDriveFolderBox();
+    const box=$('curatorManager');if(box)box.style.display='none';
+    showToast(window.takrirActiveCurator?'👤 '+window.takrirActiveCurator+' тандалды':'Бардык кураторлор көрсөтүлөт');
   };
   function ensureCuratorUI(){
     const year=$('userYear');
