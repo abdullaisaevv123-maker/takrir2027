@@ -2277,7 +2277,7 @@ async function uploadVideoToDrive(file,number,onProgress,personNameOverride){
     const metadata={
         name:file.name,
         mimeType:mime,
-        appProperties:{takrir:"1",fileNumber:String(number),personName:String(personNameOverride ?? selectedPersonName ?? "")},
+        appProperties:{takrir:"1",fileNumber:String(number),personName:String(personNameOverride ?? selectedPersonName ?? ""),curator:String(window.takrirUploadingCurator||window.takrirActiveCurator||"")},
         parents:[folder.id]
     };
 
@@ -2820,7 +2820,7 @@ async function syncFilesFromDrive(){
         if(!r.ok)throw new Error(await r.text());
         const data=await r.json();
         const rawFiles=(data.files||[]).map(f=>({
-            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:(String(f.mimeType||"").startsWith("image/")?"photo":"video"),personName:f.appProperties?.personName||"",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",createdTime:f.createdTime||"",folder:getSelectedFolder()
+            id:f.id,driveId:f.id,number:f.appProperties?.fileNumber||f.name.replace(/\.[^.]+$/,""),name:f.name,type:(String(f.mimeType||"").startsWith("image/")?"photo":"video"),personName:f.appProperties?.personName||"",curator:f.appProperties?.curator||"",url:f.webViewLink||("https://drive.google.com/file/d/"+f.id+"/view?usp=sharing"),mimeType:f.mimeType,size:f.size,date:f.createdTime?new Date(f.createdTime).toLocaleString("ky-KG"):"",createdTime:f.createdTime||"",folder:getSelectedFolder()
         }));
         const byNumber=new Map();
         rawFiles.sort((a,b)=>String(b.createdTime).localeCompare(String(a.createdTime))).forEach(f=>{
@@ -3997,6 +3997,196 @@ body{background:#d1d7db!important;color:#111b21!important;font-family:Arial,Helv
 #headerShareBtn{display:none}
 @media(max-width:700px){.clean-file-view{width:100%;padding:12px 10px 30px}.clean-file-number{font-size:21px}.clean-qr{width:150px;height:150px}.floating-actions{right:14px!important;bottom:14px!important}}
 </style>
+
+
+<style id="curator-system-styles">
+/* Куратор бөлүмү */
+.profile-name-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+#curatorControls{display:flex;align-items:center;gap:4px;max-width:180px}
+#curatorSelect{max-width:112px;border:1px solid #d5dadd;border-radius:7px;background:#fff;padding:5px 6px;font-size:12px;color:#263238}
+#addCuratorBtn{width:27px;height:27px;border:0;border-radius:50%;background:#00a884;color:#fff;font-size:19px;line-height:1}
+#curatorManager{display:none;position:absolute;top:66px;left:12px;z-index:6000;background:#fff;border:1px solid #d9e1e5;border-radius:12px;padding:14px;width:min(300px,90vw);box-shadow:0 8px 28px #0002}
+#curatorManager input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
+#curatorManager .curator-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 2px;border-bottom:1px solid #eee}
+#curatorManager .curator-row button{border:0;border-radius:7px;padding:5px 8px;background:#f0f2f5}
+#curatorManager .curator-add-action{width:100%;margin-top:9px;border:0;border-radius:8px;padding:10px;background:#00a884;color:white;font-weight:bold}
+#curatorDriveHint{font-size:12px;color:#667781;margin-top:6px}
+#sidebarPlusDock{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:8px 12px;background:#f0f2f5;border-top:1px solid #ddd;min-height:70px}
+#sidebarPlusDock .plus-hint{font-size:12px;color:#667781;margin-right:auto}
+#sidebarPlusDock #floatingActions{position:static!important;right:auto!important;bottom:auto!important;display:block!important}
+#sidebarPlusDock #floatingPlus{position:static!important;margin:0!important;width:48px;height:48px;font-size:29px}
+#plusMediaChooser{left:calc(350px - 78px);bottom:100px}
+@media(max-width:800px){
+ #curatorControls{max-width:150px}
+ #curatorSelect{max-width:90px}
+ #sidebarPlusDock{min-height:66px}
+ #sidebarPlusDock #floatingPlus{width:48px;height:48px}
+ #plusMediaChooser{left:auto;right:18px;bottom:82px}
+}
+body.dark-mode #curatorSelect,body.dark-mode #curatorManager{background:#202c33;color:#e9edef;border-color:#43535c}
+body.dark-mode #sidebarPlusDock{background:#202c33;border-color:#33434d}
+</style>
+<script id="curator-system">
+(function(){
+  const $=id=>document.getElementById(id);
+  const MAX_CURATORS=10;
+  const curatorListKey=()=> 'takrir_curators_'+(currentUser?.sub||currentUser?.email||'guest');
+  const activeCuratorKey=()=> 'takrir_active_curator_'+(currentUser?.sub||currentUser?.email||'guest');
+  const curatorFolderKey=()=> 'takrir_folder_'+(currentUser?.sub||currentUser?.email||'guest')+'_curator_'+encodeURIComponent(window.takrirActiveCurator||'');
+  function loadCurators(){
+    try { const a=JSON.parse(localStorage.getItem(curatorListKey())||'[]'); return Array.isArray(a)?a.slice(0,MAX_CURATORS):[]; }
+    catch(e){return [];}
+  }
+  function saveCurators(a){localStorage.setItem(curatorListKey(),JSON.stringify(a.slice(0,MAX_CURATORS)));}
+  window.takrirActiveCurator=localStorage.getItem(activeCuratorKey())||'';
+  window.takrirGetCurators=loadCurators;
+  window.takrirSetActiveCurator=function(name){
+    window.takrirActiveCurator=String(name||'');
+    localStorage.setItem(activeCuratorKey(),window.takrirActiveCurator);
+    renderCuratorSelect();
+    if(typeof renderChatList==='function')renderChatList();
+    if(typeof updateDriveFolderBox==='function')updateDriveFolderBox();
+  };
+  function ensureCuratorUI(){
+    const year=$('userYear');
+    if(year && !$('curatorControls')){
+      const wrap=document.createElement('span');wrap.id='curatorControls';
+      wrap.innerHTML='<select id="curatorSelect" title="Кураторду тандоо"><option value="">Кураторду тандаңыз</option></select><button id="addCuratorBtn" type="button" title="Куратор кошуу">＋</button>';
+      year.insertAdjacentElement('afterend',wrap);
+      $('curatorSelect').addEventListener('change',e=>window.takrirSetActiveCurator(e.target.value));
+      $('addCuratorBtn').addEventListener('click',toggleCuratorManager);
+    }
+    if(!$('curatorManager')){
+      const box=document.createElement('div');box.id='curatorManager';
+      box.innerHTML='<b>👤 Кураторлор</b><div id="curatorRows"></div><input id="newCuratorName" type="text" maxlength="50" placeholder="Куратордун аты (мисалы: Абдулла)"><button class="curator-add-action" type="button" id="saveNewCurator">＋ Куратор кошуу</button><div id="curatorDriveHint">Ар бир куратор үчүн папканы Настройкадан өзүнчө тандаңыз.</div>';
+      const header=document.querySelector('.sidebar-header');
+      if(header){header.style.position='relative';header.appendChild(box);}
+      $('saveNewCurator').addEventListener('click',addCurator);
+      $('newCuratorName').addEventListener('keydown',e=>{if(e.key==='Enter')addCurator();});
+    }
+    const chat=$('chatList');
+    if(chat && !$('sidebarPlusDock')){
+      const dock=document.createElement('div');dock.id='sidebarPlusDock';
+      dock.innerHTML='<span class="plus-hint">Файл номерине видео кошуу</span>';
+      chat.insertAdjacentElement('afterend',dock);
+      const actions=$('floatingActions');if(actions)dock.appendChild(actions);
+    }
+    renderCuratorSelect();
+  }
+  function toggleCuratorManager(){
+    const box=$('curatorManager');if(!box)return;
+    box.style.display=box.style.display==='block'?'none':'block';
+    renderCuratorRows();
+    if(box.style.display==='block')setTimeout(()=>$('newCuratorName')?.focus(),30);
+  }
+  function renderCuratorSelect(){
+    const select=$('curatorSelect');if(!select)return;
+    const names=loadCurators();const active=window.takrirActiveCurator||'';
+    select.innerHTML='<option value="">Баары / куратор тандоо</option>'+names.map(n=>`<option value="${escapeAttr(n)}">${escapeHTML(n)}</option>`).join('');
+    select.value=names.includes(active)?active:'';
+    if(active && !names.includes(active)){window.takrirActiveCurator='';localStorage.setItem(activeCuratorKey(),'');}
+    renderCuratorRows();
+  }
+  function renderCuratorRows(){
+    const rows=$('curatorRows');if(!rows)return;
+    const names=loadCurators();
+    rows.innerHTML=names.length?names.map(n=>`<div class="curator-row"><span>${escapeHTML(n)}</span><button type="button" onclick="window.takrirSetActiveCurator('${escapeAttr(n)}');document.getElementById('curatorManager').style.display='none'">Тандоо</button></div>`).join(''):'<div class="settings-muted">Кураторлор азырынча кошула элек.</div>';
+    const btn=$('saveNewCurator');if(btn)btn.disabled=names.length>=MAX_CURATORS;
+    const input=$('newCuratorName');if(input)input.disabled=names.length>=MAX_CURATORS;
+    if(btn && names.length>=MAX_CURATORS)btn.textContent='10 куратор кошулган';
+  }
+  function addCurator(){
+    const input=$('newCuratorName');const name=(input?.value||'').trim();
+    if(!name){showToast('Куратордун атын жазыңыз.');return;}
+    const names=loadCurators();
+    if(names.some(n=>n.toLocaleLowerCase()===name.toLocaleLowerCase())){showToast('Бул куратор бар.');return;}
+    if(names.length>=MAX_CURATORS){showToast('Эң көп 10 куратор кошулат.');return;}
+    names.push(name);saveCurators(names);input.value='';
+    window.takrirSetActiveCurator(name);renderCuratorRows();
+    showToast('✅ «'+name+'» куратору кошулду');
+  }
+
+  // Папка ар бир куратор үчүн өзүнчө сакталат.
+  window.folderStorageKey = window.folderStorageKey || null;
+  folderStorageKey = curatorFolderKey;
+  getSelectedFolder = function(){
+    try{return JSON.parse(localStorage.getItem(curatorFolderKey())||'null');}catch(e){return null;}
+  };
+  saveSelectedFolder = function(folder){localStorage.setItem(curatorFolderKey(),JSON.stringify(folder));};
+  // Папканы тандоо терезесиндеги белгилөө да активдүү кураторго гана сакталат.
+  const oldChooseFolder=window.chooseFolderDirect;
+  window.chooseFolderDirect=function(id,name){
+    saveSelectedFolder({id:id,name:name});
+    if(typeof updateDriveFolderBox==='function')updateDriveFolderBox();
+    showToast('✅ «'+name+'» папкасы '+(window.takrirActiveCurator||'тандалган куратор')+' үчүн сакталды');
+    closeModal('folderPickerModal');
+    const settings=$('settingsModal');
+    if(settings){settings.style.display='flex';updateUserUI();loadProfileImage();updateDriveFolderBox();}
+    const plus=$('floatingPlus');if(plus)plus.style.display='flex';
+  };
+
+  // Ар бир жүктөлгөн файл куратор менен белгиленет.
+  const oldUpload=uploadVideoToDrive;
+  uploadVideoToDrive=async function(file,number,onProgress,personNameOverride){
+    const active=window.takrirActiveCurator||'';
+    if(!active)throw new Error('Адегенде «Куратор» бөлүмүнөн куратор тандаңыз.');
+    const folder=getSelectedFolder();
+    if(!folder?.id)throw new Error('Бул куратор үчүн Google Drive папкасын Настройкадан тандаңыз.');
+    // uploadVideoToDrive негизги функциясында appProperties.curator кошулсун.
+    window.takrirUploadingCurator=active;
+    try{return await oldUpload(file,number,onProgress,personNameOverride);}
+    finally{window.takrirUploadingCurator='';}
+  };
+  // Сакталган файлга кураторду кошобуз жана синхрондоштурууда Drive метадайындарын окуйбуз.
+  const oldRegister=registerVideo;
+  registerVideo=async function(){
+    if(!window.takrirActiveCurator){showToast('Адегенде куратор тандаңыз.');return;}
+    await oldRegister();
+    const files=getFiles();
+    const f=files.find(x=>String(x.number)===String(selectedFileNumber));
+    if(f && !f.curator){f.curator=window.takrirActiveCurator;saveFiles(files);}
+    if(typeof renderChatList==='function')renderChatList();
+  };
+
+  // Файл тизмесин тандалган куратор боюнча чыпкалоо.
+  const originalGetDisplayFiles=getDisplayFiles;
+  getDisplayFiles=function(){
+    let files=originalGetDisplayFiles();
+    const active=window.takrirActiveCurator||'';
+    if(active)files=files.filter(f=>String(f.curator||'')===active);
+    return files;
+  };
+
+  // Аналитика: жалпы көрсөткүчтөр жана куратор боюнча файл саны.
+  const originalAnalytics=window.openAnalytics;
+  window.openAnalytics=function(){
+    if(typeof originalAnalytics==='function')originalAnalytics();
+    const box=$('analyticsContent');if(!box)return;
+    const files=(typeof getFiles==='function'?getFiles():[]).filter(f=>Number(f.year||window.takrirYear)===Number(window.takrirYear));
+    const names=loadCurators();
+    const counts=names.map(name=>({name,count:files.filter(f=>String(f.curator||'')===name).length}));
+    const unassigned=files.filter(f=>!f.curator).length;
+    const ru=document.documentElement.lang==='ru';
+    const section=document.createElement('div');
+    section.className='analytics-summary';
+    section.style.marginTop='14px';
+    section.innerHTML='<b>👥 '+(ru?'Файлы по кураторам':'Кураторлор боюнча файл номерлери')+'</b><div style="margin-top:8px">'+
+      counts.map(x=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #eee"><span>${escapeHTML(x.name)}</span><b>${x.count}</b></div>`).join('')+
+      `<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0"><span>${ru?'Без куратора':'Кураторго бөлүштүрүлө элек'}</span><b>${unassigned}</b></div>`+
+      `<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:2px solid #d9e1e5"><b>${ru?'Всего файлов':'Жалпы файл номерлери'}</b><b>${files.length}</b></div></div>`;
+    box.appendChild(section);
+  };
+
+  // Google Drive'дан келген маалыматтарда да куратор сакталсын.
+  const sourceText=document.documentElement;
+  document.addEventListener('DOMContentLoaded',ensureCuratorUI);
+  if(document.readyState!=='loading')ensureCuratorUI();
+  window.addEventListener('load',ensureCuratorUI);
+  // Жыл алмаштырганда жана барак жаңырганда UI кайра калыбына келет.
+  const oldSelectYear=window.selectTakrirYear;
+  if(typeof oldSelectYear==='function')window.selectTakrirYear=function(y){oldSelectYear(y);ensureCuratorUI();};
+})();
+</script>
 
 </body>
 </html>
